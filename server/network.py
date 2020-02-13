@@ -11,6 +11,7 @@ import pickle
 from PIL import Image
 
 
+
 BATCH_SIZE_TRAIN = 10
 LEARNING_RATE = 0.01
 EPOCHS = 5
@@ -24,7 +25,6 @@ people_dataset = []
 person_train_loader = []
 no_person_train_loader = []
 people_train_loader = []
-
 
 # people_test_loader = torch.utils.data.DataLoader(
 #     people_dataset,
@@ -77,6 +77,9 @@ class Net(nn.Module):
         x = F.dropout(x, training=self.training)
         x = self.fc2(x)
         return F.log_softmax(x)
+
+network = Net().to("cpu")
+
 
 
 def loadData():
@@ -142,12 +145,12 @@ def loadData():
     )
 
 def train(device, epoch):
-    network = Net().to(device)
+    global network
+
     optimizer = optim.SGD(network.parameters(), lr=LEARNING_RATE)
 
     network.train() #set network to training mode
 
-    print("about to train")
         
     batch_idx = -1
     for (data, target) in people_train_loader:
@@ -164,12 +167,14 @@ def train(device, epoch):
         ))
 
 def run():
-    print("yeet")
     loadData()
-    print("yeet2")
-    
     for epoch in range(EPOCHS):
         train("cpu", epoch)
+
+
+    torch.save(network, "./network.pth")
+    print("yeet")
+    
 
 
 # def test(device):

@@ -34,18 +34,8 @@ def handle_mqtt_message(client, userdata, message):
     )
 
 
-    if data.topic == 'central/getdata':
-        #convert pickle
-        new_data = pd.read_pickle(data.payload)
-
-        #update model
-
-
-
-
-        #pickle the model
-
-        #send model back down
+    # if data.topic == 'getModel':
+        
 
 
 
