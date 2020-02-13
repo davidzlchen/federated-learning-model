@@ -3,7 +3,7 @@ from flask_mqtt import Mqtt
 
 import pandas as pd
 import pickle
-import torch
+import network
 
 app = Flask(__name__)
 app.config['MQTT_BROKER_URL'] = 'localhost'
@@ -18,7 +18,8 @@ mqtt = Mqtt(app)
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    network.run()
+    return "training model"
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
@@ -41,6 +42,7 @@ def handle_mqtt_message(client, userdata, message):
 
 
 
+
         #pickle the model
 
         #send model back down
@@ -51,4 +53,6 @@ def handle_mqtt_message(client, userdata, message):
 
 
 if __name__ == '__main__':
-    app.run(host='localhost', port=5000)
+    app.run(host='localhost', port=5000, debug=True)
+
+
