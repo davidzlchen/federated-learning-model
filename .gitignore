@@ -1,3 +1,5 @@
 ENV/
 server/__pycache__/
 .vscode/
+client/.ipynb_checkpoints/
+client/files/
