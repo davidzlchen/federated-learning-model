@@ -1,4 +1,4 @@
 ENV/
 server/__pycache__/
 client/.ipynb_checkpoints/
-client/files/
+client/files/MNIST
