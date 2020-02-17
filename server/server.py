@@ -20,7 +20,9 @@ app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
 mqtt = Mqtt(app)
 
+pictures = {}
 
+photo = ""
 
 
 @app.route('/')
@@ -30,11 +32,9 @@ def index():
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
-    mqtt.subscribe('data')
+    mqtt.subscribe('client-to-server')
 
-pictures = {}
 
-photo = ""
 
 
 def reconstructBase64String(chunk):
@@ -72,23 +72,23 @@ def reconstructBase64String(chunk):
     #         '''
     #         i+=1
     #     print(str_image)
-def hello():
-    print("hello")
 
 @mqtt.on_message()
 def handle_mqtt_message(client, userdata, message):
-    print("on message")
+    print("message: ", message.payload.decode())
     data = dict(
         topic=message.topic,
         payload=message.payload.decode()
     )
-    #print(data)
+    print(data)
 
-    if data["payload"] == "done":
-        display_image(photo)
-        print("reconstruct done")
-    else:
-        reconstructBase64String(data)
+    if message.topic == "client-to-server":
+
+        if data["payload"] == "done":
+            display_image(photo)
+            print("reconstruct done")
+        else:
+            reconstructBase64String(data)
 
 
 
