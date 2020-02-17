@@ -26,13 +26,6 @@ person_train_loader = []
 no_person_train_loader = []
 people_train_loader = []
 
-# people_test_loader = torch.utils.data.DataLoader(
-#     people_dataset,
-#     batch_size=batch_size_test,
-#     shuffle=True
-# )
-
-
 class CocoDataset(Dataset):
     """ Our custom Coco Dataset """
     
@@ -77,6 +70,8 @@ class Net(nn.Module):
         x = F.dropout(x, training=self.training)
         x = self.fc2(x)
         return F.log_softmax(x)
+
+
 
 network = Net().to("cpu")
 
@@ -173,24 +168,7 @@ def run():
 
 
     torch.save(network, "./network.pth")
-    print("yeet")
     
 
 
-# def test(device):
-#     network.eval()
-#     test_loss = 0
-#     correct = 0
-#     with torch.no_grad():
-#         for data, target in itertools.islice(test_loader, 100):
-#             data, target = data.to(device), target.to(device)
-#             output = network(data)
-#             test_loss += F.nll_loss(output, target, size_average=False).item()
-#             pred = output.data.max(1, keepdim=True)[1]
-#             correct += pred.eq(target.data.view_as(pred)).sum()
-#         test_loss /= len(test_loader.dataset)
-#         test_losses.append(test_loss)
-#         print('\nTest set: Avg. loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-#             test_loss, correct, len(test_loader.dataset),
-#             100. * correct / len(test_loader.dataset)))
 

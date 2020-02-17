@@ -34,13 +34,6 @@ def handle_mqtt_message(client, userdata, message):
     )
 
 
-    # if data.topic == 'getModel':
-        
-
-
-
-    print(data)
-
 
 if __name__ == '__main__':
     app.run(host='localhost', port=5000, debug=True)
