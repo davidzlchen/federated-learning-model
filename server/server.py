@@ -1,6 +1,10 @@
 from flask import Flask
 from flask_mqtt import Mqtt
 
+import pandas as pd
+import pickle
+import network
+
 app = Flask(__name__)
 app.config['MQTT_BROKER_URL'] = 'localhost'
 app.config['MQTT_BROKER_PORT'] = 1883
@@ -9,13 +13,18 @@ app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
 mqtt = Mqtt(app)
 
+
+
+
 @app.route('/')
 def index():
-    return render_template('index.html')
+    network.run()
+    return "training model"
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
-    mqtt.subscribe('home/mytopic')
+    mqtt.subscribe('central/getdata')
+    
 
 @mqtt.on_message()
 def handle_mqtt_message(client, userdata, message):
@@ -23,4 +32,10 @@ def handle_mqtt_message(client, userdata, message):
         topic=message.topic,
         payload=message.payload.decode()
     )
-    print(data)
+
+
+
+if __name__ == '__main__':
+    app.run(host='localhost', port=5000, debug=True)
+
+
