@@ -8,6 +8,10 @@ import PIL
 from io import BytesIO
 import base64
 
+import pandas as pd
+import pickle
+import network
+
 app = Flask(__name__)
 app.config['MQTT_BROKER_URL'] = 'localhost'
 app.config['MQTT_BROKER_PORT'] = 1883
@@ -16,12 +20,17 @@ app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
 mqtt = Mqtt(app)
 
+
+
+
 @app.route('/')
 def index():
-    return render_template('index.html')
+    network.run()
+    return "training model"
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
+<<<<<<< HEAD
     mqtt.subscribe('data')
 
 pictures = {}
@@ -66,6 +75,10 @@ def reconstructBase64String(chunk):
     #     print(str_image)
 def hello():
     print("hello")
+=======
+    mqtt.subscribe('central/getdata')
+    
+>>>>>>> master
 
 @mqtt.on_message()
 def handle_mqtt_message(client, userdata, message):
@@ -74,6 +87,7 @@ def handle_mqtt_message(client, userdata, message):
         topic=message.topic,
         payload=message.payload.decode()
     )
+<<<<<<< HEAD
     #print(data)
 
     if data["payload"] == "done":
@@ -96,4 +110,12 @@ def display_image(image_data):
 
     #new_img = Image.fromarray(np.reshape(q, (427, 640, 3)))
     #new_img.save("image.jpg")
+=======
+
+
+
+if __name__ == '__main__':
+    app.run(host='localhost', port=5000, debug=True)
+
+>>>>>>> master
 
