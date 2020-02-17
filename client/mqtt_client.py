@@ -12,6 +12,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import time
+import itertools
+import base64
+import random, string
+import math
 
 #########################################
 #### model stuff
@@ -140,6 +144,38 @@ def get_train_test_times(test_losses, people_train_loader, network, optimizer):
 
     print("CPU took %s seconds" % (time.time() - start_time))
 
+########################################
+###### sending image stuff
+########################################
+
+
+def convertImageToBase64(to_encode):
+     encoded = base64.b64encode(to_encode)
+     return encoded
+
+
+def randomword(length):
+     return ''.join(random.choice(string.ascii_lowercase) for i in range(length))
+
+
+def publishEncodedImage(client, topic, encoded):
+     packet_size = 3000
+     end = packet_size
+     start = 0
+     length = len(encoded)
+     picId = randomword(8)
+     pos = 0
+     no_of_packets = math.ceil(length/packet_size)
+
+     while start <= len(encoded):
+         data = {"data": encoded[start:end].decode('utf-8'), "pic_id":picId, "pos": pos, "size": no_of_packets}
+         thing = json.dumps(data)
+         client.publish(topic, thing)
+         end += packet_size
+         start += packet_size
+         pos = pos +1
+     client.publish(topic, "done")
+
 
 #########################################
 #### mqtt stuff
@@ -152,37 +188,46 @@ def on_connect(client, userdata, flags, rc):
 
     # Subscribing in on_connect() means that if we lose the connection and
     # reconnect then subscriptions will be renewed.
-    client.subscribe("model")
+    client.subscribe("client-to-server")
 
-    person_pkl = open('./files/COCO/personimages.pkl', 'rb')
-    person_matrix = pickle.load(person_pkl)
-    person_matrix = json.dumps(person_matrix[:1])
-    client.publish("data", "hello world")
-    client.publish("data", person_matrix)
-    client.publish("data", "hello world")
+    # person_pkl = open('./files/COCO/personimages.pkl', 'rb')
+    # person_matrix = pickle.load(person_pkl)
+    # person_matrix = json.dumps(person_matrix[:1])
+    # client.publish("data", "hello world")
+    # client.publish("data", person_matrix)
+    # client.publish("data", "hello world")
     
 # The callback for when a PUBLISH message is received from the server.
 def on_message(client, userdata, msg):
     print(msg.topic+" "+str(msg.payload))
-    seed = 42
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    batch_size_train = 60
-    batch_size_test = 120
-    test_losses = []
-    learning_rate = 0.01
-    epochs = 100
-    log_interval = 10
+    if(ms.payload=="sending_model"):
+        pass
+    else:
+        seed = 42
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        batch_size_train = 60
+        batch_size_test = 120
+        test_losses = []
+        learning_rate = 0.01
+        epochs = 100
+        log_interval = 10
 
-    network = Net().to("cpu")
-    optimizer = optim.SGD(network.parameters(), lr=learning_rate)
+        network = Net().to("cpu")
+        optimizer = optim.SGD(network.parameters(), lr=learning_rate)
 
+        people_dataset = create_people_dataset()
+        people_train_loader = create_train_DataLoader(batch_size_train, people_dataset)
+        people_test_loader = create_test_DataLoader(batch_size_test, people_dataset)
+        # train(epoch, people_train_loader,network,optimizer,"cpu")
+        # test(test_losses,network,"cpu")
+        get_train_test_times(test_losses, people_train_loader, network, optimizer)
 
 
 def on_publish(client, userdata, result):
     print("data published")
 
-'''
+
 client = mqtt.Client()
 client.on_publish = on_publish
 client.on_connect = on_connect
@@ -194,28 +239,23 @@ client.connect("localhost", 1883, 65534)
 # handles reconnecting.
 # Other loop*() functions are available that give a threaded interface and a
 # manual interface.
+with open('./files/COCO/personimages.pkl', 'rb') as f:
+    image_list = pickle.load(f)
+for (image, label) in image_list:
+    #print(image)
+    topic = "client/pi01"
+    metadata = x = {
+  "shape": image.shape
+    }
+
+    encoded = convertImageToBase64(image)
+    client.publish(topic, "sending_data")
+    client.publish(topic, metadata)
+    publishEncodedImage(client,topic,encoded)
 client.loop_forever()
-'''
 
 
 
 
-seed = 42
-np.random.seed(seed)
-torch.manual_seed(seed)
-batch_size_train = 60
-batch_size_test = 120
-test_losses = []
-learning_rate = 0.01
-epochs = 100
-log_interval = 10
 
-network = Net().to("cpu")
-optimizer = optim.SGD(network.parameters(), lr=learning_rate)
 
-people_dataset = create_people_dataset()
-people_train_loader = create_train_DataLoader(batch_size_train, people_dataset)
-people_test_loader = create_test_DataLoader(batch_size_test, people_dataset)
-#train(epoch, people_train_loader,network,optimizer,"cpu")
-#test(test_losses,network,"cpu")
-get_train_test_times(test_losses, people_train_loader,network,optimizer)
