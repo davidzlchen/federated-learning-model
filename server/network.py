@@ -167,7 +167,7 @@ def run():
         train("cpu", epoch)
 
 
-    torch.save(network, "./network.pth")
+    torch.save(network.state_dict(), "./network.pth")
     
 
 
