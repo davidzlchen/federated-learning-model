@@ -174,13 +174,13 @@ def publishEncodedImage(client, topic, encoded):
      no_of_packets = math.ceil(length/packet_size)
 
      while start <= len(encoded):
-         data = {"data": encoded[start:end].decode('utf-8'), "pic_id":picId, "pos": pos, "size": no_of_packets}
+         data = {"message": "chunk", "data": encoded[start:end].decode('utf-8'), "pic_id":picId, "pos": pos, "size": no_of_packets}
          thing = json.dumps(data)
          client.publish(topic, thing)
          end += packet_size
          start += packet_size
          pos = pos +1
-     client.publish(topic, "done")
+     client.publish(topic, json.dumps({"message": "done"}))
 
 
 #########################################
@@ -251,13 +251,8 @@ with open('./files/COCO/personimages.pkl', 'rb') as f:
 for (image, label) in image_list:
     #print(image)
     topic = "client/pi01"
-    metadata = x = {
-  "shape": image.shape
-    }
-
     encoded = convertImageToBase64(image)
-    client.publish(topic, "sending_data")
-    client.publish(topic, metadata)
+    client.publish(topic, json.dumps({"message": "sending_data", "dimensions": image.shape}))
     publishEncodedImage(client,topic,encoded)
 client.loop_forever()
 
