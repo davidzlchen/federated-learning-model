@@ -17,6 +17,7 @@ import base64
 import random, string
 import math
 
+
 #########################################
 #### model stuff
 #########################################
@@ -64,6 +65,11 @@ class Net(nn.Module):
         x = F.dropout(x, training=self.training)
         x = self.fc2(x)
         return F.log_softmax(x)
+
+
+def reconstruct_model(network, filepath=""):
+    checkpoint = torch.load(('../server/network.pth'))
+    network.load_state_dict(checkpoint)
 
 
 def create_people_dataset():
@@ -115,7 +121,7 @@ def train(epoch, people_train_loader, network, optimizer, device):
         ))
 
 
-def test(test_losses, network, device):
+def test(test_losses, people_test_loader, network, device):
     network.eval()
     test_loss = 0
     correct = 0
@@ -134,13 +140,13 @@ def test(test_losses, network, device):
                 100. * correct / num_samples))
 
 
-def get_train_test_times(test_losses, people_train_loader, network, optimizer):
+def get_train_test_times(test_losses, people_train_loader, people_test_loader, network, optimizer):
     start_time = time.time()
 
     test(test_losses,network,"cpu")
     for epoch in range(epochs):
         train(epoch, people_train_loader,network,optimizer,"cpu")
-        test(test_losses,network,"cpu")
+        test(test_losses,people_test_loader,network,"cpu")
 
     print("CPU took %s seconds" % (time.time() - start_time))
 
@@ -217,12 +223,13 @@ def on_message(client, userdata, msg):
         optimizer = optim.SGD(network.parameters(), lr=learning_rate)
 
         people_dataset = create_people_dataset()
-        people_train_loader = create_train_DataLoader(batch_size_train, people_dataset)
+        #people_train_loader = create_train_DataLoader(batch_size_train, people_dataset)
         people_test_loader = create_test_DataLoader(batch_size_test, people_dataset)
         # train(epoch, people_train_loader,network,optimizer,"cpu")
-        # test(test_losses,network,"cpu")
-        get_train_test_times(test_losses, people_train_loader, network, optimizer)
-
+        # test(test_losses,people_test_loader, network,"cpu")
+        #get_train_test_times(test_losses, people_train_loader, people_test_loader, network, optimizer)
+        reconstruct_model(network)
+        test(test_losses, people_test_loader, network, "cpu")
 
 def on_publish(client, userdata, result):
     print("data published")
