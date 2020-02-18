@@ -4,9 +4,10 @@ import json
 import numpy as np
 
 from PIL import Image
-import PIL
 from io import BytesIO
 import base64
+
+from imageio import imread
 
 import pandas as pd
 import pickle
@@ -25,6 +26,9 @@ pictures = {}
 photo = ""
 
 
+clientIds = set(["pi01"])
+clientDataBlock = {}
+
 @app.route('/')
 def index():
     network.run()
@@ -32,82 +36,88 @@ def index():
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
-    mqtt.subscribe('client-to-server')
+
+    for client in clientIds:
+        
+        mqtt.subscribe('client/' + client)
 
 
 
 
-def reconstructBase64String(chunk):
-    global pictures
-    global photo
-    pChunk = json.loads(chunk["payload"])
-    #pChunk = JSON.parse(chunk["d"])
 
-    photo += pChunk["data"]
+def add_data_chunk(clientName, chunk):
 
-    # #creates a new picture object if receiving a new picture, else adds incoming strings to an existing picture
-    # if (pictures[pChunk["pic_id"]] is None):
-    #
-    #     pictures[pChunk["pic_id"]] = {"count":0, "total":pChunk["size"], "pieces": {}, "pic_id": pChunk["pic_id"]}
-    #
-    #     pictures[pChunk["pic_id"]]["pieces"][pChunk["pos"]] = pChunk["data"]
-    #
-    # else:
-    #     pictures[pChunk["pic_id"]].pieces[pChunk["pos"]] = pChunk["data"]
-    #     pictures[pChunk["pic_id"]].count += 1
-    #     print("check3")
-    #     if (pictures[pChunk["pic_id"]].count == pictures[pChunk["pic_id"]].total):
-    #         print("Image reception compelete")
-    #         str_image=""
-    #
-    #     i=0
-    #     while(i <= pictures[pChunk["pic_id"]].total):
-    #         str_image = str_image + pictures[pChunk["pic_id"]].pieces[i]
-    #
-    #         #displays image
-    #         '''
-    #         source = 'data:image/jpeg;base64,'+str_image
-    #         myImageElement = document.getElementById("picture_to_show")
-    #         myImageElement.href = source
-    #         '''
-    #         i+=1
-    #     print(str_image)
+    global clientDataBlock
+
+    currentImage = clientDataBlock[clientName]["currentImage"]
+
+    clientDataBlock[clientName]["imageData"][currentImage] = clientDataBlock[clientName]["imageData"][currentImage] + chunk
+
 
 @mqtt.on_message()
 def handle_mqtt_message(client, userdata, message):
-    print("message: ", message.payload.decode())
-    data = dict(
-        topic=message.topic,
-        payload=message.payload.decode()
-    )
-    print(data)
-
-    if message.topic == "client-to-server":
-
-        if data["payload"] == "done":
-            display_image(photo)
-            print("reconstruct done")
-        else:
-            reconstructBase64String(data)
+    global clientDataBlock
 
 
+    payload = json.loads(message.payload.decode())
 
-def display_image(image_data):
-    print("display_image reached")
-    print(image_data, "image_data")
-    image_bytes = image_data.encode()
-    print(image_bytes, "image bytes")
-    r = base64.b64decode(image_bytes)
-    print(r, 'r')
-    with open('./my_pickle.pkl', 'wb') as f:
-        f.write(r)
+    clientName = message.topic.split("/")[1]
 
-    #new_img = Image.fromarray(np.reshape(q, (427, 640, 3)))
-    #new_img.save("image.jpg")
+    if clientName in clientIds:
+        if payload["message"] == "sending_data":
+            clientDataBlock[clientName]["numImages"] += 1
+            clientDataBlock[clientName]["currentImage"] += 1
+            clientDataBlock[clientName]["imageData"].append("")
+            clientDataBlock[clientName]["dimensions"].append(payload["dimensions"])
+
+        elif payload["message"] == "done":
+            convert_data(clientName)
+        elif payload["message"] == "chunk":
+            add_data_chunk(clientName, payload["data"])
+
+counter = 0
+
+def convert_data(clientName):
+
+    global counter
+
+
+    currentImage = clientDataBlock[clientName]["currentImage"]
+
+    dims = clientDataBlock[clientName]["dimensions"][currentImage]
+
+    image_base64 = clientDataBlock[clientName]["imageData"][currentImage].encode()
+
+    img = base64.decodebytes(image_base64)
+
+    buf = np.frombuffer(img, dtype=np.uint8)
+
+    buf = np.reshape(buf, dims)
+
+    clientDataBlock[clientName]["imageData"][currentImage] = buf
+
+    im = Image.fromarray(buf)
+    path = "./pictures/img" + str(counter) + ".jpg"
+    im.save(path)
+
+    counter += 1
+
+
+def initialize():
+    global clientDataBlock
+
+    for client in clientIds:
+        clientDataBlock[client] = {
+            "numImages" : 0,
+            "currentImage": -1,
+            "imageData" : [],
+            "dimensions": [] 
+        }
 
 
 
 if __name__ == '__main__':
-    app.run(host='localhost', port=5000, debug=True)
+    initialize()
+    app.run(host='localhost', port=5000)
 
 
