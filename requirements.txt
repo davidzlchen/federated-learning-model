@@ -1,2 +1,7 @@
+numpy
+torch
+torchvision
+matplotlib
 paho-mqtt
 flask-mqtt
+pylint
