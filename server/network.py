@@ -208,7 +208,7 @@ def run(clientData):
     #     train("cpu", epoch)
 
 
-    torch.save(network.state_dict(), "./network.pth")
+    torch.save(network.fc.state_dict(), "./network.pth")
     
 
 

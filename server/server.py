@@ -50,6 +50,7 @@ def send_network_model(payload):
 
     length = len(encoded)
     num_packets = np.ceil(length/PACKET_SIZE)
+    print(num_packets)
 
     mqtt.publish("server/network", json.dumps({"message": "sending_data"}))
 
@@ -63,17 +64,16 @@ def send_network_model(payload):
 
 
         end += PACKET_SIZE
-        start = PACKET_SIZE
+        start += PACKET_SIZE
 
     mqtt.publish("server/network", json.dumps({"message": "end_transmission"}))
 
 
 @app.route('/')
 def index():
-    # network.run(clientDataBlock)
+    network.run(clientDataBlock)
 
-    model = open('.network.pth', 'rb')
-
+    model = open('./network.pth', 'rb').read()
     send_network_model(model)
 
     # saveImages()
@@ -118,6 +118,10 @@ def handle_mqtt_message(client, userdata, message):
 
         elif payload["message"] == "done":
             convert_data(clientName)
+        elif payload["message"] == "completely done":
+            network.run(clientDataBlock)
+            model = open('./network.pth', 'rb').read()
+            send_network_model(model)
         elif payload["message"] == "chunk":
             add_data_chunk(clientName, payload["data"])
 

@@ -27,9 +27,6 @@ from torch.utils.data.dataloader import default_collate
 network_str=""
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 dataset_sizes={}
-'''
-dataset_sizes = {'train': num_samples*2, 'val': num_test_samples*2}
-'''
 
 
 #########################################
@@ -70,14 +67,13 @@ class CocoDataset(Dataset):
 #     network.load_state_dict(checkpoint)
 
 def reconstruct_model(network):
-    global network_str
-    #network_bytes = network_str.encode()
-    #network_decoded = base64.decodebytes(network_bytes)
-    #checkpoint = torch.load(BytesIO(network_decoded))
-    #network.load_state_dict(checkpoint)
-    #network_str=""
+    # global network_str
+    # network_bytes = network_str.encode()
+    # network_decoded = base64.decodebytes(network_bytes)
+    # checkpoint = torch.load(BytesIO(network_decoded))
     checkpoint = torch.load(('../server/network.pth'))
-    network.load_state_dict(checkpoint)
+    network.fc.load_state_dict(checkpoint)
+    network_str=""
 
 def create_test_loader():
     global dataset_sizes
@@ -108,8 +104,7 @@ def create_test_loader():
 
 
 
-def collate_fn_v(batch):
-    print(batch)
+def collate_fn(batch):
     batch = list(filter(lambda x : x is not None, batch))
     return default_collate(batch)
 
@@ -259,6 +254,8 @@ def on_connect(client, userdata, flags, rc):
     # Subscribing in on_connect() means that if we lose the connection and
     # reconnect then subscriptions will be renewed.
     client.subscribe("server/network")
+    send_images()
+    print("publishing images done")
 
     # person_pkl = open('./files/COCO/personimages.pkl', 'rb')
     # person_matrix = pickle.load(person_pkl)
@@ -292,7 +289,7 @@ def on_message(client, userdata, msg):
         optimizer_ft = optim.SGD(resnet.parameters(), lr=0.001, momentum=0.9)
         exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
         reconstruct_model(resnet)
-        test_model(resnet, criterion, optimizer_ft, exp_lr_scheduler, dataloaders, dataset_sizes, num_epochs=25)
+        test_model(resnet, criterion, optimizer_ft, exp_lr_scheduler, dataloaders, dataset_sizes, num_epochs=1)
 
 def on_publish(client, userdata, result):
     print("data published")
@@ -310,8 +307,19 @@ client.connect("localhost", 1883, 65534)
 # # Other loop*() functions are available that give a threaded interface and a
 # # manual interface.
 
-send_images()
-print("publishing images done")
+# test_loader = create_test_loader()
+# dataloaders = {'val': test_loader}
+# resnet = models.resnet50(pretrained=True)
+# for param in resnet.parameters():
+#     param.requires_grad = False
+# resnet.fc = nn.Linear(2048, 2)
+# # resnet.load_state_dict()
+#
+# criterion = nn.CrossEntropyLoss()
+# optimizer_ft = optim.SGD(resnet.parameters(), lr=0.001, momentum=0.9)
+# exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
+# reconstruct_model(resnet)
+# test_model(resnet, criterion, optimizer_ft, exp_lr_scheduler, dataloaders, dataset_sizes, num_epochs=1)
 client.loop_forever()
 
 
