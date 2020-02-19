@@ -27,6 +27,21 @@ pictures = {}
 clientIds = set(["pi01"])
 clientDataBlock = {}
 
+
+def printImages():
+    counter = 0
+
+
+    for client in clientDataBlock:
+        images = clientDataBlock[client]["imageData"]
+
+        for i in range(0, len(images)):
+            img = Image.fromarray(images[i])
+            path = "./pictures/img" + str(counter) + ".jpg"
+            img.save(path)
+
+            counter += 1
+
 def send_network_model(payload):
     encoded = base64.b64encode(payload)
 
@@ -55,8 +70,12 @@ def send_network_model(payload):
 
 @app.route('/')
 def index():
-    network.run()
-    network_save = open('./network.pth')
+    network.run(clientDataBlock)
+    send_network_model(network)
+    
+
+
+
     
     return "training model"
 
@@ -94,17 +113,15 @@ def handle_mqtt_message(client, userdata, message):
             clientDataBlock[clientName]["currentImage"] += 1
             clientDataBlock[clientName]["imageData"].append("")
             clientDataBlock[clientName]["dimensions"].append(payload["dimensions"])
+            clientDataBlock[clientName]["labels"].append(payload["label"])
 
         elif payload["message"] == "done":
             convert_data(clientName)
         elif payload["message"] == "chunk":
             add_data_chunk(clientName, payload["data"])
 
-counter = 0
 
 def convert_data(clientName):
-
-    global counter
 
 
     currentImage = clientDataBlock[clientName]["currentImage"]
@@ -121,12 +138,6 @@ def convert_data(clientName):
 
     clientDataBlock[clientName]["imageData"][currentImage] = buf
 
-    im = Image.fromarray(buf)
-    path = "./pictures/img" + str(counter) + ".jpg"
-    im.save(path)
-
-    counter += 1
-
 
 def initialize():
     global clientDataBlock
@@ -136,7 +147,8 @@ def initialize():
             "numImages" : 0,
             "currentImage": -1,
             "imageData" : [],
-            "dimensions": [] 
+            "dimensions": [],
+            "labels": [] 
         }
 
 
