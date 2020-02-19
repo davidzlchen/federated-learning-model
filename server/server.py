@@ -7,8 +7,6 @@ from PIL import Image
 from io import BytesIO
 import base64
 
-from imageio import imread
-
 import pandas as pd
 import pickle
 import network
