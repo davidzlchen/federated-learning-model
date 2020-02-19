@@ -28,7 +28,7 @@ clientIds = set(["pi01"])
 clientDataBlock = {}
 
 
-def printImages():
+def saveImages():
     counter = 0
 
 
@@ -72,11 +72,7 @@ def send_network_model(payload):
 def index():
     network.run(clientDataBlock)
     send_network_model(network)
-    
 
-
-
-    
     return "training model"
 
 @mqtt.on_connect()
