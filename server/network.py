@@ -1,14 +1,23 @@
 import numpy as np
+import itertools
+import pickle
+import time
+import copy
+
+from PIL import Image
+
+import torchvision
+import torchvision.transforms as transforms
+import torchvision.models as models
+
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import torchvision
-import torchvision.transforms as transforms
-from torch.utils.data import Dataset
-import itertools
-import pickle
-from PIL import Image
+from torch.optim import lr_scheduler
+from torch.utils.data import Dataset, DataLoader
+from torch.utils.data.dataloader import default_collate
 
 
 
@@ -24,7 +33,13 @@ people_dataset = []
 
 person_train_loader = []
 no_person_train_loader = []
-people_train_loader = []
+people_data_loader = []
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+network = models.resnet50(pretrained=True)
+
+num_samples = 0
+
 
 class CocoDataset(Dataset):
     """ Our custom Coco Dataset """
@@ -44,130 +59,156 @@ class CocoDataset(Dataset):
         sample = self.matrix[idx]
         person = self.person[idx]
 
-        if self.transform:
-            sample = (self.transform(Image.fromarray(sample[0]).convert('LA'))[0].unsqueeze(0), person)
-        else:
-            sample = (Image.fromarray(sample[0]).convert('LA')[0].unsqueeze(0), person)
+        try:
+            if self.transform:
+                sample = (self.transform(Image.fromarray(sample)), person)
+            else:
+                sample = (Image.fromarray(sample), person)
+        except:
+            sample = None
 
         return sample
 
 
-class Net(nn.Module):
-    def __init__(self):
-        super(Net, self).__init__()
-        
-        self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
-        self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
-        self.conv2_drop = nn.Dropout2d()
-        self.fc1 = nn.Linear(320, 50)
-        self.fc2 = nn.Linear(50, 10)
-        
-    def forward(self, x):
-        x = F.relu(F.max_pool2d(self.conv1(x), 2))
-        x = F.relu(F.max_pool2d(self.conv2(x), 2))
-        x = x.view(-1, 320)
-        x = F.relu(self.fc1(x))
-        x = F.dropout(x, training=self.training)
-        x = self.fc2(x)
-        return F.log_softmax(x)
+def collate_fn(batch):
+    # print(batch)
+    batch = list(filter(lambda x : x is not None, batch))
+    return default_collate(batch)
 
 
-
-network = Net().to("cpu")
-
-
-
-def loadData():
-    no_person_pkl = open('../client/files/COCO/nopersonimages.pkl', 'rb')
-    no_person_matrix = pickle.load(no_person_pkl)
-
-    person_pkl = open('../client/files/COCO/personimages.pkl', 'rb')
-    person_matrix = pickle.load(person_pkl)
-
-
-    global person_dataset
-    global no_person_dataset
-    global people_dataset
+def loadData(raw_data):
     
-    global person_train_loader
-    global no_person_train_loader
-    global people_train_loader
+    # no_person_pkl = open('../client/files/COCO/nopersonimages.pkl', 'rb')
+    # no_person_matrix = pickle.load(no_person_pkl)
 
-    person_dataset = CocoDataset(person_matrix,
-                             transform=torchvision.transforms.Compose([
-                                   torchvision.transforms.Resize((28, 28)),
-                                   torchvision.transforms.ToTensor(),
-                                   torchvision.transforms.Normalize((0.1307, ), (0.3081,))
-                             ]),
-                             person=np.ones(120))
-                             
-    no_person_dataset = CocoDataset(no_person_matrix,
-                             transform=torchvision.transforms.Compose([
-                                   torchvision.transforms.Resize((28, 28)),
-                                   torchvision.transforms.ToTensor(),
-                                   torchvision.transforms.Normalize((0.1307, ), (0.3081,))
-                             ]),
-                             person=np.zeros(120))
+    # person_pkl = open('../client/files/COCO/personimages.pkl', 'rb')
+    # person_matrix = pickle.load(person_pkl)
+
+    global num_samples
+    global people_dataset
+    global people_data_loader
 
 
+    images = []
+    labels = []
 
-    people_dataset = CocoDataset(person_matrix + no_person_matrix,
-                             transform=torchvision.transforms.Compose([
-                                   torchvision.transforms.Resize((28, 28)),
-                                   torchvision.transforms.ToTensor(),
-                                   torchvision.transforms.Normalize((0.1307, ), (0.3081,))
-                             ]),
-                             person=np.concatenate((np.ones(120, dtype=np.int_), np.zeros(120, dtype=np.int_)))
-                            )
+    for client in raw_data:
+        images.extend(raw_data[client]["imageData"])
+        labels.extend(raw_data[client]["labels"])
 
-    person_train_loader = torch.utils.data.DataLoader(
-        person_dataset,
-        batch_size=BATCH_SIZE_TRAIN, 
-        shuffle=True
-    )
+    num_samples = len(images)
+    
 
-    no_person_train_loader = torch.utils.data.DataLoader(
-        no_person_dataset,
-        batch_size=BATCH_SIZE_TRAIN,
-        shuffle=True
+    people_dataset = CocoDataset(
+        images,
+        transform=torchvision.transforms.Compose([
+            transforms.RandomResizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ]),
+        person=labels
     )
 
     batch_size_train = 60
-    people_train_loader = torch.utils.data.DataLoader(
+    people_data_loader = DataLoader(
         people_dataset,
-        batch_size=batch_size_train,
-        shuffle=True
+        batch_size=2,
+        shuffle=True,
+        collate_fn=collate_fn
     )
 
-def train(device, epoch):
-    global network
-
-    optimizer = optim.SGD(network.parameters(), lr=LEARNING_RATE)
-
-    network.train() #set network to training mode
-
+def train_model(model, criterion, optimizer, scheduler, dataloader, dataset_size, num_epochs=25):
+    since = time.time()
+    
+    best_model_wts = copy.deepcopy(model.state_dict())
+    best_acc = 0.0
+    
+    for epoch in range(num_epochs):
+        print("Epoch {}/{}".format(epoch, num_epochs - 1))
+        print("-" * 10)
         
-    batch_idx = -1
-    for (data, target) in people_train_loader:
-        batch_idx += 1
-        data, target = data.to(device), target.to(device)
-        optimizer.zero_grad()
-        output = network(data)
-        loss = F.nll_loss(output, target)
-        loss.backward()
-        optimizer.step()
-        print('Train Epoch: {} [{}/{} ({:.2f}%)]\tLoss: {:.6f}'.format(
-            epoch, batch_idx * len(data), len(people_train_loader.dataset),
-            100. * batch_idx / len(people_train_loader), loss.item()
-        ))
+        for phase in ['train', 'val']:
+            if phase == 'train':
+                model.train()
+            else:
+                model.eval()
+                
+            running_loss = 0.0
+            running_corrects = 0
 
-def run():
-    loadData()
-    for epoch in range(EPOCHS):
-        train("cpu", epoch)
+            # Iterate over data.
+            for inputs, labels in dataloader:
+                inputs = inputs.to(device)
+                labels = labels.to(device)
+
+                # zero the parameter gradients
+                optimizer.zero_grad()
+
+                # forward
+                # track history if only in train
+                with torch.set_grad_enabled(phase == 'train'):
+                    outputs = model(inputs)
+                    _, preds = torch.max(outputs, 1)
+                    loss = criterion(outputs, labels)
+
+                    # backward + optimize only if in training phase
+                    if phase == 'train':
+                        loss.backward()
+                        optimizer.step()
+
+                # statistics
+                running_loss += loss.item() * inputs.size(0)
+                running_corrects += torch.sum(preds == labels.data)
+            if phase == 'train':
+                scheduler.step()
+
+            epoch_loss = running_loss / dataset_size
+            epoch_acc = running_corrects.double() / dataset_size
+
+            print('{} Loss: {:.4f} Acc: {:.4f}'.format(
+                phase, epoch_loss, epoch_acc))
+
+            # deep copy the model
+            if phase == 'val' and epoch_acc > best_acc:
+                best_acc = epoch_acc
+                best_model_wts = copy.deepcopy(model.state_dict())
+
+        print()
+
+    time_elapsed = time.time() - since
+    print('Training complete in {:.0f}m {:.0f}s'.format(
+        time_elapsed // 60, time_elapsed % 60))
+    print('Best val Acc: {:4f}'.format(best_acc))
+
+    # load best model weights
+    model.load_state_dict(best_model_wts)
+    return model
+
+def run(clientData):
+
+    global network
+    global people_data_loader
 
 
-    torch.save(network, "./network.pth")
+    loadData(clientData)
+
+    for param in network.parameters():
+        param.requires_grad = False
+    network.fc = nn.Linear(2048, 2)
+
+    criterion = nn.CrossEntropyLoss()
+    optimizer_ft = optim.SGD(network.parameters(), lr=0.001, momentum=0.9)
+    exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
+
+
+    network = train_model(network, criterion, optimizer_ft, exp_lr_scheduler, people_data_loader, num_samples, num_epochs=2)
+
+    # for epoch in range(EPOCHS):
+    #     train("cpu", epoch)
+
+
+    torch.save(network.fc.state_dict(), "./network.pth")
     
 
 
