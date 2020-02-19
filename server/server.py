@@ -70,8 +70,11 @@ def send_network_model(payload):
 
 @app.route('/')
 def index():
-    network.run(clientDataBlock)
-    # send_network_model(network)
+    # network.run(clientDataBlock)
+
+    model = open('.network.pth', 'rb')
+
+    send_network_model(model)
 
     # saveImages()
 
