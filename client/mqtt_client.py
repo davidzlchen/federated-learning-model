@@ -17,6 +17,7 @@ import base64
 import random, string
 import math
 
+network_str=""
 
 #########################################
 #### model stuff
@@ -67,10 +68,17 @@ class Net(nn.Module):
         return F.log_softmax(x)
 
 
-def reconstruct_model(network, filepath=""):
-    checkpoint = torch.load(('../server/network.pth'))
-    network.load_state_dict(checkpoint)
+# def load_model(network, filepath=""):
+#     checkpoint = torch.load(('../server/network.pth'))
+#     network.load_state_dict(checkpoint)
 
+def reconstruct_model(network):
+    global network_str
+    network_bytes = network_str.encode()
+    network_decoded = base64.decodebytes(network_bytes)
+    checkpoint = torch.load(BytesIO(network_decoded))
+    network.load_state_dict(checkpoint)
+    network_str=""
 
 def create_people_dataset():
     person_pkl = open('./files/COCO/personimages.pkl', 'rb')
@@ -143,7 +151,7 @@ def test(test_losses, people_test_loader, network, device):
 def get_train_test_times(test_losses, people_train_loader, people_test_loader, network, optimizer):
     start_time = time.time()
 
-    test(test_losses,network,"cpu")
+    test(test_losses,people_test_loader, network,"cpu")
     for epoch in range(epochs):
         train(epoch, people_train_loader,network,optimizer,"cpu")
         test(test_losses,people_test_loader,network,"cpu")
@@ -164,24 +172,50 @@ def randomword(length):
      return ''.join(random.choice(string.ascii_lowercase) for i in range(length))
 
 
-def publishEncodedImage(client, topic, encoded):
-     packet_size = 3000
-     end = packet_size
-     start = 0
-     length = len(encoded)
-     picId = randomword(8)
-     pos = 0
-     no_of_packets = math.ceil(length/packet_size)
+def publishEncodedImage(image, label):
+    packet_size = 3000
+    encoded = base64.b64encode(image)
 
-     while start <= len(encoded):
-         data = {"message": "chunk", "data": encoded[start:end].decode('utf-8'), "pic_id":picId, "pos": pos, "size": no_of_packets}
-         thing = json.dumps(data)
-         client.publish(topic, thing)
-         end += packet_size
-         start += packet_size
-         pos = pos +1
-     client.publish(topic, json.dumps({"message": "done"}))
+    end = packet_size
+    start = 0
+    length = len(encoded)
+    no_of_packets = math.ceil(length/packet_size)
 
+    client.publish("client/pi01", json.dumps({"message": "sending_data", "dimensions": image.shape, "label": label}))
+
+    while start <= len(encoded):
+        data = {"message": "chunk", "data": encoded[start:end].decode('utf-8')}
+        data_packet = json.dumps(data)
+
+        client.publish("client/pi01", data_packet)
+
+        end += packet_size
+        start += packet_size
+
+
+    client.publish("client/pi01", json.dumps({"message": "done"}))
+
+def send_images():
+    # person_pkl = open('./files/COCO/personimages.pkl', 'rb')
+    persons_data = pickle.load(open('./files/COCO/personimages.pkl', 'rb'))
+    no_persons_data = pickle.load(open('./files/COCO/nopersonimages.pkl', 'rb'))
+    person_images = []
+    no_person_images = []
+
+    for image in persons_data:
+        person_images.append(image[0])
+
+    for image in no_persons_data:
+        no_person_images.append(image[0])
+
+    Image.fromarray(no_person_images[0])
+    end = int(120/15)
+    for j in range(0,end):
+        time.sleep(5)
+        for i in range(15*j, 15*j+15):
+            ''' must send in batches bc broker can't handle 240 images sent at once'''
+            publishEncodedImage(person_images[i], 1)
+            publishEncodedImage(no_person_images[i], 0)
 
 #########################################
 #### mqtt stuff
@@ -194,7 +228,7 @@ def on_connect(client, userdata, flags, rc):
 
     # Subscribing in on_connect() means that if we lose the connection and
     # reconnect then subscriptions will be renewed.
-    client.subscribe("client-to-server")
+    client.subscribe("server/network")
 
     # person_pkl = open('./files/COCO/personimages.pkl', 'rb')
     # person_matrix = pickle.load(person_pkl)
@@ -205,10 +239,16 @@ def on_connect(client, userdata, flags, rc):
     
 # The callback for when a PUBLISH message is received from the server.
 def on_message(client, userdata, msg):
-    print(msg.topic+" "+str(msg.payload))
-    if(ms.payload=="sending_model"):
+    print("on message")
+    print(msg.topic)
+    global network_str
+    #print(msg.topic+" "+str(msg.payload))
+    payload = json.loads(msg.payload.decode())
+    if(payload["message"]=="sending_data"):
         pass
-    else:
+    elif(payload["message"]=="network_chunk"):
+        network_str += payload["data"]
+    elif(payload["message"]=="end_transmission"):
         seed = 42
         np.random.seed(seed)
         torch.manual_seed(seed)
@@ -225,9 +265,10 @@ def on_message(client, userdata, msg):
         people_dataset = create_people_dataset()
         #people_train_loader = create_train_DataLoader(batch_size_train, people_dataset)
         people_test_loader = create_test_DataLoader(batch_size_test, people_dataset)
-        # train(epoch, people_train_loader,network,optimizer,"cpu")
-        # test(test_losses,people_test_loader, network,"cpu")
+        #train(epoch, people_train_loader,network,optimizer,"cpu")
+        #test(test_losses,people_test_loader, network,"cpu")
         #get_train_test_times(test_losses, people_train_loader, people_test_loader, network, optimizer)
+
         reconstruct_model(network)
         test(test_losses, people_test_loader, network, "cpu")
 
@@ -236,27 +277,20 @@ def on_publish(client, userdata, result):
 
 
 client = mqtt.Client()
-client.on_publish = on_publish
+#client.on_publish = on_publish
 client.on_connect = on_connect
 client.on_message = on_message
 
 client.connect("localhost", 1883, 65534)
 
-# Blocking call that processes network traffic, dispatches callbacks and
-# handles reconnecting.
-# Other loop*() functions are available that give a threaded interface and a
-# manual interface.
-with open('./files/COCO/personimages.pkl', 'rb') as f:
-    image_list = pickle.load(f)
-for (image, label) in image_list:
-    #print(image)
-    topic = "client/pi01"
-    encoded = convertImageToBase64(image)
-    client.publish(topic, json.dumps({"message": "sending_data", "dimensions": image.shape}))
-    publishEncodedImage(client,topic,encoded)
+# # Blocking call that processes network traffic, dispatches callbacks and
+# # handles reconnecting.
+# # Other loop*() functions are available that give a threaded interface and a
+# # manual interface.
+
+send_images()
+print("publishing images done")
 client.loop_forever()
-
-
 
 
 
