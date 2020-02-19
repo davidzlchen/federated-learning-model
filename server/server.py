@@ -21,17 +21,45 @@ app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
 mqtt = Mqtt(app)
 
+
+PACKET_SIZE = 3000
+
+
 pictures = {}
-
-photo = ""
-
-
 clientIds = set(["pi01"])
 clientDataBlock = {}
+
+def send_network_model(payload):
+    encoded = base64.b64encode(payload)
+
+    end = PACKET_SIZE
+    start = 0
+
+    length = len(encoded)
+    num_packets = np.ceil(length/PACKET_SIZE)
+
+    mqtt.publish("server/network", json.dumps({"message": "sending_data"}))
+
+    while start <= length:
+
+        data = {"message" : "network_chunk", "data": encoded[start:end].decode('utf-8')}
+
+        data_packet = json.dumps(data)
+
+        mqtt.publish('server/network', data_packet)
+
+
+        end += PACKET_SIZE
+        start = PACKET_SIZE
+
+    mqtt.publish("server/network", json.dumps({"message": "end_transmission"}))
+
 
 @app.route('/')
 def index():
     network.run()
+    network_save = open('./network.pth')
+    
     return "training model"
 
 @mqtt.on_connect()
@@ -40,7 +68,6 @@ def handle_connect(client, userdata, flags, rc):
     for client in clientIds:
         
         mqtt.subscribe('client/' + client)
-
 
 
 
