@@ -70,8 +70,10 @@ def send_network_model(payload):
 
 @app.route('/')
 def index():
-    network.run(clientDataBlock)
-    send_network_model(network)
+    # network.run(clientDataBlock)
+    # send_network_model(network)
+
+    saveImages()
 
     return "training model"
 
