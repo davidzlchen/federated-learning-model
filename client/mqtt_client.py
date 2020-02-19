@@ -16,8 +16,21 @@ import itertools
 import base64
 import random, string
 import math
+import copy
+import os
+import torchvision.models as models
+from torch.optim import lr_scheduler
+from torch.utils.data import Dataset, DataLoader
+from torch.utils.data.dataloader import default_collate
+
 
 network_str=""
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+dataset_sizes={}
+'''
+dataset_sizes = {'train': num_samples*2, 'val': num_test_samples*2}
+'''
+
 
 #########################################
 #### model stuff
@@ -41,31 +54,15 @@ class CocoDataset(Dataset):
         sample = self.matrix[idx]
         person = self.person[idx]
 
-        if self.transform:
-            sample = (self.transform(Image.fromarray(sample[0]).convert('LA'))[0].unsqueeze(0), person)
-        else:
-            sample = (Image.fromarray(sample[0]).convert('LA')[0].unsqueeze(0), person)
+        try:
+            if self.transform:
+                sample = (self.transform(Image.fromarray(sample[0])), person)
+            else:
+                sample = (Image.fromarray(sample[0]), person)
+        except:
+            sample = None
 
         return sample
-
-class Net(nn.Module):
-    def __init__(self):
-        super(Net, self).__init__()
-
-        self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
-        self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
-        self.conv2_drop = nn.Dropout2d()
-        self.fc1 = nn.Linear(320, 50)
-        self.fc2 = nn.Linear(50, 10)
-
-    def forward(self, x):
-        x = F.relu(F.max_pool2d(self.conv1(x), 2))
-        x = F.relu(F.max_pool2d(self.conv2(x), 2))
-        x = x.view(-1, 320)
-        x = F.relu(self.fc1(x))
-        x = F.dropout(x, training=self.training)
-        x = self.fc2(x)
-        return F.log_softmax(x)
 
 
 # def load_model(network, filepath=""):
@@ -74,89 +71,122 @@ class Net(nn.Module):
 
 def reconstruct_model(network):
     global network_str
-    network_bytes = network_str.encode()
-    network_decoded = base64.decodebytes(network_bytes)
-    checkpoint = torch.load(BytesIO(network_decoded))
+    #network_bytes = network_str.encode()
+    #network_decoded = base64.decodebytes(network_bytes)
+    #checkpoint = torch.load(BytesIO(network_decoded))
+    #network.load_state_dict(checkpoint)
+    #network_str=""
+    checkpoint = torch.load(('../server/network.pth'))
     network.load_state_dict(checkpoint)
-    network_str=""
 
-def create_people_dataset():
-    person_pkl = open('./files/COCO/personimages.pkl', 'rb')
-    person_matrix = pickle.load(person_pkl)
-    no_person_pkl = open('./files/COCO/nopersonimages.pkl', 'rb')
-    no_person_matrix = pickle.load(no_person_pkl)
-    people_dataset = CocoDataset(person_matrix + no_person_matrix,
-                                 transform=torchvision.transforms.Compose([
-                                       torchvision.transforms.Resize((28, 28)),
-                                       torchvision.transforms.ToTensor(),
-                                       torchvision.transforms.Normalize((0.1307, ), (0.3081,))
-                                 ]),
-                                 person=np.concatenate((np.ones(120, dtype=np.int_), np.zeros(120, dtype=np.int_)))
-                                )
-    return people_dataset
-def create_train_DataLoader(batch_size_train, people_dataset):
-    people_train_loader = torch.utils.data.DataLoader(
-        people_dataset,
-        batch_size=batch_size_train,
-        shuffle=True
+def create_test_loader():
+    global dataset_sizes
+    person_test_pkl = open('./files/COCO/personimagesTest.pkl', 'rb')
+    person_test_matrices = pickle.load(person_test_pkl)
+    no_person_test_pkl = open('./files/COCO/nopersonimagesTest.pkl', 'rb')
+    no_person_test_matrices = pickle.load(no_person_test_pkl)
+
+    num_test_samples = len(person_test_matrices)
+    dataset_sizes = {'val': num_test_samples * 2}
+    test_dataset = CocoDataset(
+        person_test_matrices + no_person_test_matrices,
+        transform=transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ]),
+        person=np.concatenate((np.ones(num_test_samples, dtype=np.int_), np.zeros(num_test_samples, dtype=np.int_)))
     )
-    return people_train_loader
-
-def create_test_DataLoader(batch_size_test, people_dataset):
-    people_test_loader = torch.utils.data.DataLoader(
-        people_dataset,
-        batch_size=batch_size_test,
-        shuffle=True
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=2,
+        shuffle=True,
+        collate_fn=collate_fn
     )
-    return people_test_loader
+    return test_loader
 
 
-def train(epoch, people_train_loader, network, optimizer, device):
-    network.train()  # set network to training mode
 
-    batch_idx = -1
-    for (data, target) in people_train_loader:
-        batch_idx += 1
-        data, target = data.to(device), target.to(device)
-        optimizer.zero_grad()
-        output = network(data)
-        loss = F.nll_loss(output, target)
-        loss.backward()
-        optimizer.step()
-        print('Train Epoch: {} [{}/{} ({:.2f}%)]\tLoss: {:.6f}'.format(
-            epoch, batch_idx * len(data), len(people_train_loader.dataset),
-                   100. * batch_idx / len(people_train_loader), loss.item()
-        ))
+def collate_fn_v(batch):
+    print(batch)
+    batch = list(filter(lambda x : x is not None, batch))
+    return default_collate(batch)
 
 
-def test(test_losses, people_test_loader, network, device):
-    network.eval()
-    test_loss = 0
-    correct = 0
-    with torch.no_grad():
-        for data, target in people_test_loader:
-            data, target = data.to(device), target.to(device)
-            output = network(data)
-            test_loss += F.nll_loss(output, target, size_average=False).item()
-            pred = output.data.max(1, keepdim=True)[1]
-            correct += pred.eq(target.data.view_as(pred)).sum()
-        num_samples = len(people_test_loader.dataset)
-        test_loss /= num_samples
-        test_losses.append(test_loss)
-        print('\nTest set: Avg. loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-                test_loss, correct, num_samples,
-                100. * correct / num_samples))
+def test_model(model, criterion, optimizer, scheduler, dataloaders, dataset_sizes, num_epochs=25):
+    global device
+    since = time.time()
+
+    best_model_wts = copy.deepcopy(model.state_dict())
+    best_acc = 0.0
+
+    for epoch in range(num_epochs):
+        print("Epoch {}/{}".format(epoch, num_epochs - 1))
+        print("-" * 10)
+
+        for phase in ['val']:
+            if phase == 'train':
+                model.train()
+            else:
+                model.eval()
+
+            running_loss = 0.0
+            running_corrects = 0
+
+            # Iterate over data.
+            for inputs, labels in dataloaders[phase]:
+                inputs = inputs.to(device)
+                labels = labels.to(device)
+
+                # zero the parameter gradients
+                optimizer.zero_grad()
+
+                # forward
+                # track history if only in train
+                with torch.set_grad_enabled(phase == 'train'):
+                    outputs = model(inputs)
+                    _, preds = torch.max(outputs, 1)
+                    loss = criterion(outputs, labels)
+
+                    # backward + optimize only if in training phase
+                    if phase == 'train':
+                        loss.backward()
+                        optimizer.step()
+
+                # statistics
+                running_loss += loss.item() * inputs.size(0)
+                running_corrects += torch.sum(preds == labels.data)
+            if phase == 'train':
+                scheduler.step()
+
+            epoch_loss = running_loss / dataset_sizes[phase]
+            epoch_acc = running_corrects.double() / dataset_sizes[phase]
+
+            print('{} Loss: {:.4f} Acc: {:.4f}'.format(
+                phase, epoch_loss, epoch_acc))
+
+            # deep copy the model
+            if phase == 'val' and epoch_acc > best_acc:
+                best_acc = epoch_acc
+                best_model_wts = copy.deepcopy(model.state_dict())
+
+        print()
+
+    time_elapsed = time.time() - since
+    print('Training complete in {:.0f}m {:.0f}s'.format(
+        time_elapsed // 60, time_elapsed % 60))
+    print('Best val Acc: {:4f}'.format(best_acc))
+
+    # load best model weights
+    model.load_state_dict(best_model_wts)
+    return model
 
 
-def get_train_test_times(test_losses, people_train_loader, people_test_loader, network, optimizer):
-    start_time = time.time()
 
-    test(test_losses,people_test_loader, network,"cpu")
-    for epoch in range(epochs):
-        train(epoch, people_train_loader,network,optimizer,"cpu")
-        test(test_losses,people_test_loader,network,"cpu")
 
-    print("CPU took %s seconds" % (time.time() - start_time))
+
+
 
 ########################################
 ###### sending image stuff
@@ -242,6 +272,7 @@ def on_message(client, userdata, msg):
     print("on message")
     print(msg.topic)
     global network_str
+    global dataset_sizes
     #print(msg.topic+" "+str(msg.payload))
     payload = json.loads(msg.payload.decode())
     if(payload["message"]=="sending_data"):
@@ -249,28 +280,19 @@ def on_message(client, userdata, msg):
     elif(payload["message"]=="network_chunk"):
         network_str += payload["data"]
     elif(payload["message"]=="end_transmission"):
-        seed = 42
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        batch_size_train = 60
-        batch_size_test = 120
-        test_losses = []
-        learning_rate = 0.01
-        epochs = 100
-        log_interval = 10
+        test_loader = create_test_loader()
+        dataloaders = {'val': test_loader}
+        resnet = models.resnet50(pretrained=True)
+        for param in resnet.parameters():
+            param.requires_grad = False
+        resnet.fc = nn.Linear(2048, 2)
+        # resnet.load_state_dict()
 
-        network = Net().to("cpu")
-        optimizer = optim.SGD(network.parameters(), lr=learning_rate)
-
-        people_dataset = create_people_dataset()
-        #people_train_loader = create_train_DataLoader(batch_size_train, people_dataset)
-        people_test_loader = create_test_DataLoader(batch_size_test, people_dataset)
-        #train(epoch, people_train_loader,network,optimizer,"cpu")
-        #test(test_losses,people_test_loader, network,"cpu")
-        #get_train_test_times(test_losses, people_train_loader, people_test_loader, network, optimizer)
-
-        reconstruct_model(network)
-        test(test_losses, people_test_loader, network, "cpu")
+        criterion = nn.CrossEntropyLoss()
+        optimizer_ft = optim.SGD(resnet.parameters(), lr=0.001, momentum=0.9)
+        exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
+        reconstruct_model(resnet)
+        test_model(resnet, criterion, optimizer_ft, exp_lr_scheduler, dataloaders, dataset_sizes, num_epochs=25)
 
 def on_publish(client, userdata, result):
     print("data published")
