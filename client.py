@@ -14,7 +14,8 @@ import torch.optim as optim
 import time
 import itertools
 import base64
-import random, string
+import random
+import string
 import math
 import copy
 import os
@@ -24,13 +25,13 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataloader import default_collate
 
 
-network_str=""
+network_str = ""
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-dataset_sizes={}
+dataset_sizes = {}
 
 
 #########################################
-#### model stuff
+# model stuff
 #########################################
 
 class CocoDataset(Dataset):
@@ -56,7 +57,7 @@ class CocoDataset(Dataset):
                 sample = (self.transform(Image.fromarray(sample[0])), person)
             else:
                 sample = (Image.fromarray(sample[0]), person)
-        except:
+        except BaseException:
             sample = None
 
         return sample
@@ -73,7 +74,8 @@ def reconstruct_model(network):
     # checkpoint = torch.load(BytesIO(network_decoded))
     checkpoint = torch.load(('../server/network.pth'))
     network.fc.load_state_dict(checkpoint)
-    network_str=""
+    network_str = ""
+
 
 def create_test_loader():
     global dataset_sizes
@@ -103,13 +105,19 @@ def create_test_loader():
     return test_loader
 
 
-
 def collate_fn(batch):
-    batch = list(filter(lambda x : x is not None, batch))
+    batch = list(filter(lambda x: x is not None, batch))
     return default_collate(batch)
 
 
-def test_model(model, criterion, optimizer, scheduler, dataloaders, dataset_sizes, num_epochs=25):
+def test_model(
+        model,
+        criterion,
+        optimizer,
+        scheduler,
+        dataloaders,
+        dataset_sizes,
+        num_epochs=25):
     global device
     since = time.time()
 
@@ -178,23 +186,19 @@ def test_model(model, criterion, optimizer, scheduler, dataloaders, dataset_size
     return model
 
 
-
-
-
-
-
 ########################################
-###### sending image stuff
+# sending image stuff
 ########################################
 
 
 def convertImageToBase64(to_encode):
-     encoded = base64.b64encode(to_encode)
-     return encoded
+    encoded = base64.b64encode(to_encode)
+    return encoded
 
 
 def randomword(length):
-     return ''.join(random.choice(string.ascii_lowercase) for i in range(length))
+    return ''.join(random.choice(string.ascii_lowercase)
+                   for i in range(length))
 
 
 def publishEncodedImage(image, label):
@@ -204,9 +208,12 @@ def publishEncodedImage(image, label):
     end = packet_size
     start = 0
     length = len(encoded)
-    no_of_packets = math.ceil(length/packet_size)
+    no_of_packets = math.ceil(length / packet_size)
 
-    client.publish("client/pi01", json.dumps({"message": "sending_data", "dimensions": image.shape, "label": label}))
+    client.publish("client/pi01",
+                   json.dumps({"message": "sending_data",
+                               "dimensions": image.shape,
+                               "label": label}))
 
     while start <= len(encoded):
         data = {"message": "chunk", "data": encoded[start:end].decode('utf-8')}
@@ -217,13 +224,14 @@ def publishEncodedImage(image, label):
         end += packet_size
         start += packet_size
 
-
     client.publish("client/pi01", json.dumps({"message": "done"}))
+
 
 def send_images():
     # person_pkl = open('./files/COCO/personimages.pkl', 'rb')
     persons_data = pickle.load(open('./files/COCO/personimages.pkl', 'rb'))
-    no_persons_data = pickle.load(open('./files/COCO/nopersonimages.pkl', 'rb'))
+    no_persons_data = pickle.load(
+        open('./files/COCO/nopersonimages.pkl', 'rb'))
     person_images = []
     no_person_images = []
 
@@ -234,22 +242,22 @@ def send_images():
         no_person_images.append(image[0])
 
     Image.fromarray(no_person_images[0])
-    end = int(120/15)
-    for j in range(0,end):
+    end = int(120 / 15)
+    for j in range(0, end):
         time.sleep(5)
-        for i in range(15*j, 15*j+15):
+        for i in range(15 * j, 15 * j + 15):
             ''' must send in batches bc broker can't handle 240 images sent at once'''
             publishEncodedImage(person_images[i], 1)
             publishEncodedImage(no_person_images[i], 0)
 
 #########################################
-#### mqtt stuff
+# mqtt stuff
 #########################################
 
 
 # The callback for when the client receives a CONNACK response from the server.
 def on_connect(client, userdata, flags, rc):
-    print("Connected with result code "+str(rc))
+    print("Connected with result code " + str(rc))
 
     # Subscribing in on_connect() means that if we lose the connection and
     # reconnect then subscriptions will be renewed.
@@ -263,8 +271,10 @@ def on_connect(client, userdata, flags, rc):
     # client.publish("data", "hello world")
     # client.publish("data", person_matrix)
     # client.publish("data", "hello world")
-    
+
 # The callback for when a PUBLISH message is received from the server.
+
+
 def on_message(client, userdata, msg):
     print("on message")
     print(msg.topic)
@@ -272,11 +282,11 @@ def on_message(client, userdata, msg):
     global dataset_sizes
     #print(msg.topic+" "+str(msg.payload))
     payload = json.loads(msg.payload.decode())
-    if(payload["message"]=="sending_data"):
+    if(payload["message"] == "sending_data"):
         pass
-    elif(payload["message"]=="network_chunk"):
+    elif(payload["message"] == "network_chunk"):
         network_str += payload["data"]
-    elif(payload["message"]=="end_transmission"):
+    elif(payload["message"] == "end_transmission"):
         test_loader = create_test_loader()
         dataloaders = {'val': test_loader}
         resnet = models.resnet50(pretrained=True)
@@ -287,9 +297,18 @@ def on_message(client, userdata, msg):
 
         criterion = nn.CrossEntropyLoss()
         optimizer_ft = optim.SGD(resnet.parameters(), lr=0.001, momentum=0.9)
-        exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
+        exp_lr_scheduler = lr_scheduler.StepLR(
+            optimizer_ft, step_size=7, gamma=0.1)
         reconstruct_model(resnet)
-        test_model(resnet, criterion, optimizer_ft, exp_lr_scheduler, dataloaders, dataset_sizes, num_epochs=1)
+        test_model(
+            resnet,
+            criterion,
+            optimizer_ft,
+            exp_lr_scheduler,
+            dataloaders,
+            dataset_sizes,
+            num_epochs=1)
+
 
 def on_publish(client, userdata, result):
     print("data published")
@@ -321,7 +340,3 @@ client.connect("localhost", 1883, 65534)
 # reconstruct_model(resnet)
 # test_model(resnet, criterion, optimizer_ft, exp_lr_scheduler, dataloaders, dataset_sizes, num_epochs=1)
 client.loop_forever()
-
-
-
-
