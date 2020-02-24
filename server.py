@@ -1,13 +1,11 @@
-import pickle
+import base64
+import json
+import person_classifier
 
+from datablock import Datablock
 from flask import Flask
 from flask_mqtt import Mqtt
-from PIL import Image
-
-import base64
-import network
-import json
-import numpy as np
+from utils.mqtt_helper import MessageType, send_typed_message
 
 app = Flask(__name__)
 app.config['MQTT_BROKER_URL'] = 'localhost'
@@ -15,122 +13,60 @@ app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
 mqtt = Mqtt(app)
 
+# global variables
 PACKET_SIZE = 3000
-
-pictures = {}
-clientIds = set(["pi01"])
-clientDataBlock = {}
-
-
-def saveImages():
-    counter = 0
-
-    for client in clientDataBlock:
-        images = clientDataBlock[client]["imageData"]
-
-        for i in range(0, len(images)):
-            img = Image.fromarray(images[i])
-            path = "./pictures/img" + str(counter) + ".jpg"
-            img.save(path)
-
-            counter += 1
-
-
-def send_network_model(payload):
-    encoded = base64.b64encode(payload)
-
-    end = PACKET_SIZE
-    start = 0
-
-    length = len(encoded)
-    num_packets = np.ceil(length / PACKET_SIZE)
-    print(num_packets)
-
-    mqtt.publish("server/network", json.dumps({"message": "sending_data"}))
-
-    while start <= length:
-        data = {"message": "network_chunk",
-                "data": encoded[start:end].decode('utf-8')}
-        data_packet = json.dumps(data)
-        mqtt.publish('server/network', data_packet)
-        end += PACKET_SIZE
-        start += PACKET_SIZE
-
-    mqtt.publish("server/network", json.dumps({"message": "end_transmission"}))
-
+CLIENT_IDS = set(["pi01"])
+CLIENT_DATABLOCKS = {}
 
 @app.route('/')
 def index():
-    network.run(clientDataBlock)
-    model = open('./network.pth', 'rb').read()
-    send_network_model(model)
-    # saveImages()
-    return "training model"
-
+    state_dict = person_classifier.train(CLIENT_DATABLOCKS)
+    #model = open('./network.pth', 'rb').read()
+    send_network_model(state_dict)
+    return "Successfully trained model and sent to subscribed clients."
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
-    for client in clientIds:
-        mqtt.subscribe('client/' + client)
-
-
-def add_data_chunk(clientName, chunk):
-    global clientDataBlock
-
-    currentImage = clientDataBlock[clientName]["currentImage"]
-    clientDataBlock[clientName]["imageData"][currentImage] = clientDataBlock[clientName]["imageData"][currentImage] + chunk
-
+    for c_id in CLIENT_IDS:
+        mqtt.subscribe('client/' + c_id)
 
 @mqtt.on_message()
 def handle_mqtt_message(client, userdata, message):
-    global clientDataBlock
+    client_name = message.topic.split("/")[1]
 
     payload = json.loads(message.payload.decode())
-    clientName = message.topic.split("/")[1]
+    dimensions = payload["dimensions"]
+    label = payload["label"]
+    data = payload["data"]
 
-    if clientName in clientIds:
+    if client_name in CLIENT_IDS:
         if payload["message"] == "sending_data":
-            clientDataBlock[clientName]["numImages"] += 1
-            clientDataBlock[clientName]["currentImage"] += 1
-            clientDataBlock[clientName]["imageData"].append("")
-            clientDataBlock[clientName]["dimensions"].append(
-                payload["dimensions"])
-            clientDataBlock[clientName]["labels"].append(payload["label"])
-
-        elif payload["message"] == "done":
-            convert_data(clientName)
-        elif payload["message"] == "completely done":
-            network.run(clientDataBlock)
-            model = open('./network.pth', 'rb').read()
-            send_network_model(model)
+            initialize_new_image(client_name, dimensions, label)
         elif payload["message"] == "chunk":
-            add_data_chunk(clientName, payload["data"])
+            add_data_chunk(client_name, data)
+        elif payload["message"] == "done":
+            convert_data(client_name)
 
+def initialize_new_image(client_name, dimensions, label):
+    datablock = CLIENT_DATABLOCKS[client_name]
+    datablock = datablock.init_new_image(dimensions, label)
+    CLIENT_DATABLOCKS[client_name] = datablock
 
-def convert_data(clientName):
-    currentImage = clientDataBlock[clientName]["currentImage"]
-    dims = clientDataBlock[clientName]["dimensions"][currentImage]
-    image_base64 = clientDataBlock[clientName]["imageData"][currentImage].encode(
-    )
-    img = base64.decodebytes(image_base64)
-    buf = np.frombuffer(img, dtype=np.uint8)
-    buf = np.reshape(buf, dims)
-    clientDataBlock[clientName]["imageData"][currentImage] = buf
+def add_data_chunk(client_name, chunk):
+    datablock = CLIENT_DATABLOCKS[client_name]
+    datablock.add_image_chunk(chunk)
 
+def convert_data(client_name):
+    datablock = CLIENT_DATABLOCKS[client_name]
+    datablock.convert_current_image_to_matrix()
 
-def initialize():
-    global clientDataBlock
+def send_network_model(payload):
+    send_typed_message(mqtt, "server/network", payload, MessageType.NETWORK_CHUNK)
 
-    for client in clientIds:
-        clientDataBlock[client] = {
-            "numImages": 0,
-            "currentImage": -1,
-            "imageData": [],
-            "dimensions": [],
-            "labels": []
-        }
-
+def initialize_datablocks():
+    for client in CLIENT_IDS:
+        CLIENT_DATABLOCKS[client] = Datablock()
 
 if __name__ == '__main__':
-    initialize()
+    initialize_datablocks()
     app.run(host='localhost', port=5000)

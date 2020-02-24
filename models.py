@@ -1,10 +1,8 @@
-from copy import deepcopy
-
 import torch
 import torch.nn as nn
-
 import torchvision.models as models
 
+from copy import deepcopy
 
 class PersonBinaryClassifier(nn.Module):
     def __init__(self):
