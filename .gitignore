@@ -1,5 +1,5 @@
-ENV/
-server/__pycache__/
 .vscode/
-client/.ipynb_checkpoints/
-client/files/MNIST
+ENV/
+__pycache__/
+*.pyc
+*.pth
