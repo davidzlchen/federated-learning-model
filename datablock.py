@@ -1,12 +1,16 @@
 from utils.image_helper import transform_json_data_to_image_matrix
 
 class Datablock(object):
-    def __init__(self):
-        self.num_images = 0
-        self.current_image = -1
-        self.image_data = []
+    def __init__(
+            self,
+            images=[],
+            labels=[]
+        ):
+        self.num_images = len(images)
+        self.current_image = self.num_images - 1
+        self.image_data = images 
         self.dimensions = []
-        self.labels = []
+        self.labels = labels
 
     def init_new_image(self, dimensions, label):
         self.num_images += 1

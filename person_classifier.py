@@ -16,13 +16,13 @@ GAMMA = 0.1
 EPOCHS = 2
 LOG_INTERVAL = 10
 
-def load_data(raw_data):
+def load_data(datablocks):
     images = []
     labels = []
-
-    for client in raw_data:
-        images.extend(raw_data[client].image_data)
-        labels.extend(raw_data[client].labels)
+    
+    for client in datablocks:
+        images.extend(datablocks[client].image_data)
+        labels.extend(datablocks[client].labels)
 
     people_dataset = CocoDataset(
         images,
@@ -35,6 +35,8 @@ def load_data(raw_data):
         labels=labels
     )
 
+    print(len(people_dataset))
+
     people_data_loader = DataLoader(
         people_dataset,
         batch_size=BATCH_SIZE_TRAIN,
@@ -44,22 +46,33 @@ def load_data(raw_data):
 
     return people_data_loader
 
-def train(client_data):
-    people_data_loader = load_data(client_data)
+def initialize_runner(dataloader, epochs):
     model = PersonBinaryClassifier()
     criterion = CrossEntropyLoss()
     optimizer_ft = SGD(model.parameters(), lr=LEARNING_RATE, momentum=MOMENTUM)
     exp_lr_scheduler = lr_scheduler.StepLR(
         optimizer_ft, step_size=STEP_SIZE, gamma=GAMMA)
-    num_epochs = EPOCHS
+    dataloaders = {'val': dataloader, 'train': dataloader}
 
     runner = ModelRunner(
         model=model,
         criterion=criterion,
-        dataloaders=people_data_loader,
-        epochs=num_epochs,
+        dataloaders=dataloaders,
+        epochs=epochs,
         optimizer=optimizer_ft,
         scheduler=exp_lr_scheduler
     )
+    return runner
+
+def train(client_data):
+    runner = get_model_runner(client_data, 2)
     return runner.train_model()
-    #model.save('./network.pth')
+
+def test(client_data):
+    runner = get_model_runner(client_data)
+    return runner.test_model()
+
+def get_model_runner(client_data, num_epochs=1):
+    people_data_loader = load_data(client_data)
+    runner = initialize_runner(people_data_loader, num_epochs)
+    return runner

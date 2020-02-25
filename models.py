@@ -11,14 +11,21 @@ class PersonBinaryClassifier(nn.Module):
         for param in resnet.parameters():
             param.requires_grad = False
         resnet.fc = nn.Linear(2048, 2)
-        self.resnet = resnet
+        self.model = resnet
 
     def forward(self, x):
         return self.model.forward(x)
 
     def save(self, path):
-        torch.save(self.model.fc.state_dict, path)
-        print("Successfully saved model to: {}", path)
+        torch.save(self.model.fc.state_dict(), path)
+        print("Successfully saved model to: {}".format(path))
+
+    def get_state_dictionary(self):
+        return self.model.fc.state_dict()
+
+    def load_last_layer_state_dictionary(self, state_dict):
+        self.model.fc.load_state_dict(state_dict)
+        print('Successfully loaded last layer state dictionary.')
 
 
 class ModelRunner(object):
@@ -57,7 +64,7 @@ class ModelRunner(object):
 
                 # Iterate over data.
                 dataloader = self.dataloaders[phase]
-                dataset_size = len(dataloader)
+                dataset_size = len(dataloader.dataset)
                 for inputs, labels in dataloader:
                     # zero the parameter gradients
                     self.optimizer.zero_grad()
@@ -100,12 +107,15 @@ class ModelRunner(object):
     def test_model(self):
         self.model.eval()
 
+        print("Epoch 1/1")
+        print("-" * 10)
+
         running_loss = 0.0
         running_corrects = 0
 
         # Iterate over data.
-        dataloader = self.dataloaders['val']
-        dataset_size = len(dataloader)
+        dataloader = self.dataloaders['train']
+        dataset_size = len(dataloader.dataset)
         for inputs, labels in dataloader:
             # forward
             # track history if only in train

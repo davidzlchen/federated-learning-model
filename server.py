@@ -1,6 +1,7 @@
 import base64
 import json
 import person_classifier
+import utils.constants as constants
 
 from datablock import Datablock
 from flask import Flask
@@ -20,8 +21,11 @@ CLIENT_DATABLOCKS = {}
 
 @app.route('/')
 def index():
-    state_dict = person_classifier.train(CLIENT_DATABLOCKS)
-    #model = open('./network.pth', 'rb').read()
+    global CLIENT_DATABLOCKS
+
+    model = person_classifier.train(CLIENT_DATABLOCKS)
+    model.save('./network.pth')
+    state_dict = open('./network.pth', 'rb').read()
     send_network_model(state_dict)
     return "Successfully trained model and sent to subscribed clients."
 
@@ -35,35 +39,45 @@ def handle_mqtt_message(client, userdata, message):
     client_name = message.topic.split("/")[1]
 
     payload = json.loads(message.payload.decode())
-    dimensions = payload["dimensions"]
-    label = payload["label"]
-    data = payload["data"]
+    dimensions = payload.get("dimensions", None)
+    label = payload.get("label", None)
+    data = payload.get("data", None)
+    message = payload.get("message", None)
 
     if client_name in CLIENT_IDS:
-        if payload["message"] == "sending_data":
+        if message == constants.DEFAULT_IMAGE_INIT:
             initialize_new_image(client_name, dimensions, label)
-        elif payload["message"] == "chunk":
+        elif message == constants.DEFAULT_IMAGE_CHUNK:
             add_data_chunk(client_name, data)
-        elif payload["message"] == "done":
+        elif message == constants.DEFAULT_IMAGE_END:
             convert_data(client_name)
 
 def initialize_new_image(client_name, dimensions, label):
+    global CLIENT_DATABLOCKS
+
     datablock = CLIENT_DATABLOCKS[client_name]
     datablock = datablock.init_new_image(dimensions, label)
-    CLIENT_DATABLOCKS[client_name] = datablock
 
 def add_data_chunk(client_name, chunk):
+    global CLIENT_DATABLOCKS
+
     datablock = CLIENT_DATABLOCKS[client_name]
     datablock.add_image_chunk(chunk)
 
 def convert_data(client_name):
+    global CLIENT_DATABLOCKS
+
     datablock = CLIENT_DATABLOCKS[client_name]
     datablock.convert_current_image_to_matrix()
+
+    print('done')
 
 def send_network_model(payload):
     send_typed_message(mqtt, "server/network", payload, MessageType.NETWORK_CHUNK)
 
 def initialize_datablocks():
+    global CLIENT_DATABLOCKS
+
     for client in CLIENT_IDS:
         CLIENT_DATABLOCKS[client] = Datablock()
 
