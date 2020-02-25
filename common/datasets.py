@@ -4,6 +4,7 @@ from torch.utils.data import Dataset
 from torch.utils.data.dataloader import default_collate
 from utils.image_helper import transform_matrix_to_image
 
+
 class CocoDataset(Dataset):
     """ Our custom Coco Dataset """
 
@@ -27,10 +28,11 @@ class CocoDataset(Dataset):
             if self.transform:
                 image = self.transform(image)
             sample = (image, label)
-        except:
+        except BaseException:
             sample = None
 
         return sample
+
 
 def collate_fn(batch):
     batch = list(filter(lambda x: x is not None, batch))

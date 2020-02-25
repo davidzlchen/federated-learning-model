@@ -1,14 +1,15 @@
 from utils.image_helper import transform_json_data_to_image_matrix
 
+
 class Datablock(object):
     def __init__(
-            self,
-            images=[],
-            labels=[]
-        ):
+        self,
+        images=[],
+        labels=[]
+    ):
         self.num_images = len(images)
         self.current_image = self.num_images - 1
-        self.image_data = images 
+        self.image_data = images
         self.dimensions = []
         self.labels = labels
 
@@ -27,5 +28,6 @@ class Datablock(object):
         i_idx = self.current_image
         image_dimensions = self.dimensions[i_idx]
         image_ascii_rep = self.image_data[i_idx]
-        image_matrix_rep = transform_json_data_to_image_matrix(image_ascii_rep, image_dimensions)
+        image_matrix_rep = transform_json_data_to_image_matrix(
+            image_ascii_rep, image_dimensions)
         self.image_data[i_idx] = image_matrix_rep

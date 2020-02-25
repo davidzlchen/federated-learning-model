@@ -5,8 +5,8 @@ from torch.nn import CrossEntropyLoss
 from torch.optim import SGD, lr_scheduler
 from torch.utils.data import DataLoader
 
-from models import PersonBinaryClassifier, ModelRunner
-from datasets import CocoDataset, collate_fn
+from common.models import PersonBinaryClassifier, ModelRunner
+from common.datasets import CocoDataset, collate_fn
 
 BATCH_SIZE_TRAIN = 10
 LEARNING_RATE = 0.001
@@ -16,10 +16,11 @@ GAMMA = 0.1
 EPOCHS = 2
 LOG_INTERVAL = 10
 
+
 def load_data(datablocks):
     images = []
     labels = []
-    
+
     for client in datablocks:
         images.extend(datablocks[client].image_data)
         labels.extend(datablocks[client].labels)
@@ -46,6 +47,7 @@ def load_data(datablocks):
 
     return people_data_loader
 
+
 def initialize_runner(dataloader, epochs):
     model = PersonBinaryClassifier()
     criterion = CrossEntropyLoss()
@@ -64,13 +66,16 @@ def initialize_runner(dataloader, epochs):
     )
     return runner
 
+
 def train(client_data):
     runner = get_model_runner(client_data, 2)
     return runner.train_model()
 
+
 def test(client_data):
     runner = get_model_runner(client_data)
     return runner.test_model()
+
 
 def get_model_runner(client_data, num_epochs=1):
     people_data_loader = load_data(client_data)
