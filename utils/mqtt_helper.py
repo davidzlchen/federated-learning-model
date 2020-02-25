@@ -9,6 +9,7 @@ DEFAULT_PACKET_SIZE = 3000
 class MessageType(Enum):
     NETWORK_CHUNK = 1
     IMAGE_CHUNK = 2
+    SIMPLE = 3 #use when short enough to not need chunks
 
 def is_json(myjson):
     try:
@@ -58,5 +59,7 @@ def send_typed_message(client, topic, message, message_type):
         send_network_chunk_message(client, topic, message)
     elif message_type is MessageType.IMAGE_CHUNK:
         send_image_chunk_message(client, topic, message)
+    elif message_type is MessageType.SIMPLE:
+        send_message(client,topic,message)
     else:
         print('{} not handled'.format(message_type))
