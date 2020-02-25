@@ -4,6 +4,7 @@ import torchvision.models as models
 
 from copy import deepcopy
 
+
 class PersonBinaryClassifier(nn.Module):
     def __init__(self):
         super(PersonBinaryClassifier, self).__init__()
