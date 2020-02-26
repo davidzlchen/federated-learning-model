@@ -35,11 +35,6 @@ def index():
 def handle_connect(client, userdata, flags, rc):
 
 
-    for c_id in CLIENT_IDS:
-        mqtt.subscribe('client/' + c_id)
-        return
-
-
 @mqtt.on_message()
 def handle_mqtt_message(client, userdata, message):
 
