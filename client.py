@@ -50,13 +50,17 @@ def test():
     runner.test_model()
 
 ########################################
-# sending image stuff
+# sending stuff
 ########################################
 
 
 def publish_encoded_image(image, label):
     sample = (image, label)
     send_typed_message(client, DEFAULT_TOPIC, sample, MessageType.IMAGE_CHUNK)
+
+
+def publish_encoded_model(payload):
+    send_typed_message(client, DEFAULT_TOPIC, payload, MessageType.NETWORK_CHUNK)
 
 
 def send_images():
@@ -73,6 +77,29 @@ def send_images():
             time.sleep(1)
     print('sent all images!')
 
+
+def send_model():
+    persons_data = pickle.load(open('./data/personimages.pkl', 'rb'))
+    no_persons_data = pickle.load(open('./data/nopersonimages.pkl', 'rb'))
+
+
+    datablock = Datablock()
+
+    for label, images in enumerate([no_persons_data, persons_data]):
+        for image, _ in images:
+            datablock.init_new_image(image.shape, label)
+            datablock.image_data[-1] = image
+
+    datablock_dict = {"pi01": datablock}
+
+    model = person_classifier.train(datablock_dict)
+    model.save('./network.pth')
+    state_dict = open('./network.pth', 'rb').read()
+    publish_encoded_model(state_dict)
+
+
+    print('model_sent!')
+
 #########################################
 # mqtt stuff
 #########################################
@@ -83,7 +110,8 @@ def send_images():
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code " + str(rc))
     client.subscribe("server/network")
-    send_images()
+    send_model()
+
     print("publishing images done")
 
 # The callback for when a PUBLISH message is received from the server.
@@ -94,12 +122,12 @@ def on_message(client, userdata, msg):
 
     payload = json.loads(msg.payload.decode())
     message_type = payload["message"]
-    if (message_type == constants.DEFAULT_NETWORK_INIT):
+    if message_type == constants.DEFAULT_NETWORK_INIT:
         print("transmitting network data")
         print("-" * 10)
-    elif (message_type == constants.DEFAULT_NETWORK_CHUNK):
+    elif message_type == constants.DEFAULT_NETWORK_CHUNK:
         NETWORK_STRING += payload["data"]
-    elif (message_type == constants.DEFAULT_NETWORK_END):
+    elif message_type == constants.DEFAULT_NETWORK_END:
         print("done, running evaluation on transmitted model")
         test()
     else:
