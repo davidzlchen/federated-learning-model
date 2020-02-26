@@ -16,7 +16,7 @@ mqtt = Mqtt(app)
 
 # global variables
 PACKET_SIZE = 3000
-CLIENT_IDS = set(["pi01"])
+CLIENT_IDS = set()
 CLIENT_DATABLOCKS = {}
 
 
@@ -33,12 +33,25 @@ def index():
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
+
+
     for c_id in CLIENT_IDS:
         mqtt.subscribe('client/' + c_id)
+        return
 
 
 @mqtt.on_message()
 def handle_mqtt_message(client, userdata, message):
+
+    #Add a new client and subscribe to appropriate topic
+    if message.topic == constants.NEW_CLIENT_INITIALIZATION:
+        client_id = message.payload.decode()
+
+        CLIENT_IDS.add(client_id)
+        mqtt.subscribe('client/' + client_id)
+        return
+
+
     client_name = message.topic.split("/")[1]
 
     payload = json.loads(message.payload.decode())
