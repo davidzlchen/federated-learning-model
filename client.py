@@ -13,6 +13,7 @@ from utils.model_helper import get_state_dictionary
 NETWORK_STRING = ''
 DEFAULT_BATCH_SIZE = 15
 DEFAULT_TOPIC = 'client/pi01'
+SEND_MODEL = False
 
 ########################################
 # model stuff
@@ -110,7 +111,10 @@ def send_model():
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code " + str(rc))
     client.subscribe("server/network")
-    send_model()
+    if SEND_MODEL:
+    	send_model()
+    else:
+    	send_images()
 
     print("publishing images done")
 
