@@ -13,7 +13,9 @@ from utils.model_helper import get_state_dictionary
 NETWORK_STRING = ''
 DEFAULT_BATCH_SIZE = 15
 DEFAULT_TOPIC = 'client/pi01'
-SEND_MODEL = False
+DATABLOCK = Datablock()
+DATA_INDEX = 0
+SEND_MODEL = True
 
 ########################################
 # model stuff
@@ -80,18 +82,22 @@ def send_images():
 
 
 def send_model():
+    global DATABLOCK
+    global DATA_INDEX
     persons_data = pickle.load(open('./data/personimages.pkl', 'rb'))
     no_persons_data = pickle.load(open('./data/nopersonimages.pkl', 'rb'))
 
 
-    datablock = Datablock()
-
     for label, images in enumerate([no_persons_data, persons_data]):
         for image, _ in images:
-            datablock.init_new_image(image.shape, label)
-            datablock.image_data[-1] = image
+            DATABLOCK.init_new_image(image.shape, label)
+            DATABLOCK.image_data[-1] = image
 
-    datablock_dict = {"pi01": datablock}
+    DATABLOCK.shuffle_data()
+
+    datablock_dict = {'pi01': DATABLOCK[0:25]}
+    DATA_INDEX += 24
+
 
     model = person_classifier.train(datablock_dict)
     model.save('./network.pth')
@@ -112,9 +118,9 @@ def on_connect(client, userdata, flags, rc):
     print("Connected with result code " + str(rc))
     client.subscribe("server/network")
     if SEND_MODEL:
-    	send_model()
+        send_model()
     else:
-    	send_images()
+        send_images()
 
     print("publishing images done")
 
