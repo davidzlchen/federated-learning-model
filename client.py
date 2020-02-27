@@ -14,7 +14,6 @@ from utils.model_helper import get_state_dictionary
 NETWORK_STRING = ''
 DEFAULT_BATCH_SIZE = 15
 CURRENT_TOPIC = 'client/pi01'
-SHARED_TOPIC = 'client_ids' # topic to be shared by all pis and server
 
 ########################################
 # model stuff
@@ -82,18 +81,19 @@ def send_images():
 def send_client_id():
     global CURRENT_TOPIC
     pi_id = 'pi{}'.format(uuid.uuid4())
-    CURRENT_TOPIC = 'client/'.format(pi_id)
+    CURRENT_TOPIC = 'client/{}'.format(pi_id)
     message = {
-        'message': pi_id
+        "message": pi_id
     }
-    send_typed_message(client, SHARED_TOPIC, message, MessageType.SIMPLE)
+    message = json.dumps(message)
+    client.subscribe(CURRENT_TOPIC)
+    send_typed_message(client, constants.NEW_CLIENT_INITIALIZATION, message, MessageType.SIMPLE)
 
 # The callback for when the client receives a CONNACK response from the server.
 
 
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code " + str(rc))
-    client.subscribe(SHARED_TOPIC)
     send_client_id()
     client.subscribe("server/network")
     send_images()
@@ -104,7 +104,7 @@ def on_connect(client, userdata, flags, rc):
 
 def on_message(client, userdata, msg):
     global NETWORK_STRING
-
+    #print(msg.payload)
     payload = json.loads(msg.payload.decode())
     message_type = payload["message"]
     if (message_type == constants.DEFAULT_NETWORK_INIT):

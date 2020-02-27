@@ -33,17 +33,21 @@ def index():
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
-
+    print("connected")
+    mqtt.subscribe(constants.NEW_CLIENT_INITIALIZATION)
+    print("connected after sbuscribing")
 
 @mqtt.on_message()
 def handle_mqtt_message(client, userdata, message):
-
     #Add a new client and subscribe to appropriate topic
     if message.topic == constants.NEW_CLIENT_INITIALIZATION:
-        client_id = message.payload.decode()
-
+        #client_id = message.payload.decode()
+        payload = json.loads(message.payload.decode())
+        client_id = payload.get("message", None)
         CLIENT_IDS.add(client_id)
+        initialize_datablocks(client_id)
         mqtt.subscribe('client/' + client_id)
+        #mqtt.publish('client/' + client_id, "server received from"+client_id)
         return
 
 
@@ -95,13 +99,12 @@ def send_network_model(payload):
         MessageType.NETWORK_CHUNK)
 
 
-def initialize_datablocks():
+def initialize_datablocks(client):
     global CLIENT_DATABLOCKS
 
-    for client in CLIENT_IDS:
-        CLIENT_DATABLOCKS[client] = Datablock()
-
+    # for client in CLIENT_IDS:
+    #     CLIENT_DATABLOCKS[client] = Datablock()
+    CLIENT_DATABLOCKS[client] = Datablock()
 
 if __name__ == '__main__':
-    initialize_datablocks()
     app.run(host='localhost', port=5000)
