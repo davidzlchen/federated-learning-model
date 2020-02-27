@@ -13,7 +13,8 @@ from utils.model_helper import get_state_dictionary
 
 NETWORK_STRING = ''
 DEFAULT_BATCH_SIZE = 15
-CURRENT_TOPIC = 'client/pi01'
+PI_ID = 'pi{}'.format(uuid.uuid4())
+DEVICE_TOPIC = 'client/{}'.format(PI_ID)
 
 ########################################
 # model stuff
@@ -57,7 +58,7 @@ def test():
 
 def publish_encoded_image(image, label):
     sample = (image, label)
-    send_typed_message(client, CURRENT_TOPIC, sample, MessageType.IMAGE_CHUNK)
+    send_typed_message(client, DEVICE_TOPIC, sample, MessageType.IMAGE_CHUNK)
 
 
 def send_images():
@@ -78,16 +79,19 @@ def send_images():
 # mqtt stuff
 #########################################
 
+
 def send_client_id():
-    global CURRENT_TOPIC
-    pi_id = 'pi{}'.format(uuid.uuid4())
-    CURRENT_TOPIC = 'client/{}'.format(pi_id)
+    global DEVICE_TOPIC
     message = {
-        "message": pi_id
+        "message": PI_ID
     }
     message = json.dumps(message)
-    client.subscribe(CURRENT_TOPIC)
-    send_typed_message(client, constants.NEW_CLIENT_INITIALIZATION, message, MessageType.SIMPLE)
+    client.subscribe(DEVICE_TOPIC)
+    send_typed_message(
+        client,
+        constants.NEW_CLIENT_INITIALIZATION_TOPIC,
+        message,
+        MessageType.SIMPLE)
 
 # The callback for when the client receives a CONNACK response from the server.
 
@@ -104,7 +108,7 @@ def on_connect(client, userdata, flags, rc):
 
 def on_message(client, userdata, msg):
     global NETWORK_STRING
-    #print(msg.payload)
+
     payload = json.loads(msg.payload.decode())
     message_type = payload["message"]
     if (message_type == constants.DEFAULT_NETWORK_INIT):
