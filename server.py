@@ -16,7 +16,7 @@ mqtt = Mqtt(app)
 
 # global variables
 PACKET_SIZE = 3000
-CLIENT_IDS = set(["pi01"])
+CLIENT_IDS = set()
 CLIENT_DATABLOCKS = {}
 
 
@@ -33,20 +33,24 @@ def index():
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
-    for c_id in CLIENT_IDS:
-        mqtt.subscribe('client/' + c_id)
+    print("connected")
+    mqtt.subscribe(constants.NEW_CLIENT_INITIALIZATION_TOPIC)
 
 
 @mqtt.on_message()
-def handle_mqtt_message(client, userdata, message):
-    client_name = message.topic.split("/")[1]
-
-    payload = json.loads(message.payload.decode())
+def handle_mqtt_message(client, userdata, msg):
+    payload = json.loads(msg.payload.decode())
     dimensions = payload.get("dimensions", None)
     label = payload.get("label", None)
     data = payload.get("data", None)
     message = payload.get("message", None)
 
+    # Add a new client and subscribe to appropriate topic
+    if msg.topic == constants.NEW_CLIENT_INITIALIZATION_TOPIC:
+        initialize_new_clients(message)
+        return
+
+    client_name = message.topic.split("/")[1]
     if client_name in CLIENT_IDS:
         if message == constants.DEFAULT_IMAGE_INIT:
             initialize_new_image(client_name, dimensions, label)
@@ -54,6 +58,12 @@ def handle_mqtt_message(client, userdata, message):
             add_data_chunk(client_name, data)
         elif message == constants.DEFAULT_IMAGE_END:
             convert_data(client_name)
+
+
+def initialize_new_clients(client_id):
+    CLIENT_IDS.add(client_id)
+    initialize_datablocks(client_id)
+    mqtt.subscribe('client/' + client_id)
 
 
 def initialize_new_image(client_name, dimensions, label):
@@ -87,13 +97,10 @@ def send_network_model(payload):
         MessageType.NETWORK_CHUNK)
 
 
-def initialize_datablocks():
+def initialize_datablocks(client):
     global CLIENT_DATABLOCKS
-
-    for client in CLIENT_IDS:
-        CLIENT_DATABLOCKS[client] = Datablock()
+    CLIENT_DATABLOCKS[client] = Datablock()
 
 
 if __name__ == '__main__':
-    initialize_datablocks()
     app.run(host='localhost', port=5000)
