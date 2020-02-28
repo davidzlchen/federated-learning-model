@@ -4,6 +4,8 @@ Demo of federated learning.
 
 ## Setting up requirements
 
+** These instructions assume you are on Ubuntu 16.04, they may be different for other operating systems. **
+
 Clone this repository and cd to it.
 
 Install [mosquitto](https://mosquitto.org/), a MQTT broker.
@@ -18,7 +20,7 @@ Then create a new virtualenv and switch to it.
 
 ```bash
   virtualenv ENV
-  source ENV/in/activate
+  source ENV/bin/activate
 ```
 
 Then install the requirements
@@ -40,5 +42,5 @@ Then install the requirements
 After making changes, make sure to format your code.
 
 ```bash
-autopep8 --in-place --aggressive --aggressive *.py
+python3 -m autopep8 --in-place --aggressive --aggressive --recursive *.py common utils
 ```

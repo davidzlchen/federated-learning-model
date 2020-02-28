@@ -63,7 +63,11 @@ def publish_encoded_image(image, label):
 
 
 def publish_encoded_model(payload):
-    send_typed_message(client, DEFAULT_TOPIC, payload, MessageType.NETWORK_CHUNK)
+    send_typed_message(
+        client,
+        DEVICE_TOPIC,
+        payload,
+        MessageType.NETWORK_CHUNK)
 
 
 def send_images():
@@ -85,7 +89,6 @@ def send_model():
     persons_data = pickle.load(open('./data/personimages.pkl', 'rb'))
     no_persons_data = pickle.load(open('./data/nopersonimages.pkl', 'rb'))
 
-
     datablock = Datablock()
 
     for label, images in enumerate([no_persons_data, persons_data]):
@@ -100,7 +103,6 @@ def send_model():
     state_dict = open('./network.pth', 'rb').read()
     publish_encoded_model(state_dict)
 
-
     print('model_sent!')
 
 #########################################
@@ -113,7 +115,6 @@ def send_client_id():
     message = {
         "message": PI_ID
     }
-    message = json.dumps(message)
     client.subscribe(DEVICE_TOPIC)
     send_typed_message(
         client,
@@ -121,17 +122,15 @@ def send_client_id():
         message,
         MessageType.SIMPLE)
 
-# The callback for when the client receives a CONNACK response from the server.
-
 
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code " + str(rc))
     send_client_id()
     client.subscribe("server/network")
     if SEND_MODEL:
-    	send_model()
+        send_model()
     else:
-    	send_images()
+        send_images()
 
     print("publishing images done")
 

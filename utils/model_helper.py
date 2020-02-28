@@ -5,7 +5,10 @@ import torch
 USE_LOCAL_NETWORK_CHECKPOINT = False
 LOCAL_NETWORK_CHECKPOINT_PATH = './network.pth'
 
-def get_state_dictionary(network_string='', path=LOCAL_NETWORK_CHECKPOINT_PATH):
+
+def get_state_dictionary(
+        network_string='',
+        path=LOCAL_NETWORK_CHECKPOINT_PATH):
     if USE_LOCAL_NETWORK_CHECKPOINT:
         checkpoint = torch.load(path)
     else:

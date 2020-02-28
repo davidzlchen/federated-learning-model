@@ -1,6 +1,6 @@
 DEFAULT_NETWORK_INIT = 'sending_data'
 DEFAULT_NETWORK_INIT_MESSAGE = {
-    'message': DEFAULT_NETWORK_INIT 
+    'message': DEFAULT_NETWORK_INIT
 }
 
 DEFAULT_NETWORK_CHUNK = 'network_chunk'
