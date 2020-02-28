@@ -4,7 +4,7 @@ Demo of federated learning.
 
 ## Setting up requirements
 
-** These instructions assume you are on Ubuntu 16.04, they may be different for other operating systems. **
+**These instructions assume you are on Ubuntu 16.04, they may be different for other operating systems.**
 
 Clone this repository and cd to it.
 
