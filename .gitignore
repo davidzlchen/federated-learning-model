@@ -1,4 +1,5 @@
 .vscode/
+.idea/
 ENV/
 __pycache__/
 *.pyc
