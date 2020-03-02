@@ -50,7 +50,7 @@ def handle_mqtt_message(client, userdata, msg):
         initialize_new_clients(message)
         return
 
-    client_name = message.topic.split("/")[1]
+    client_name = msg.topic.split("/")[1]
     if client_name in CLIENT_IDS:
         if message == constants.DEFAULT_IMAGE_INIT:
             initialize_new_image(client_name, dimensions, label)
