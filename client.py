@@ -99,8 +99,11 @@ def send_model():
     datablock_dict = {"pi01": datablock}
 
     model = person_classifier.train(datablock_dict)
+
     model.save('./network.pth')
+
     state_dict = open('./network.pth', 'rb').read()
+
     publish_encoded_model(state_dict)
 
     print('model_sent!')
