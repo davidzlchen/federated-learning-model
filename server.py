@@ -85,7 +85,8 @@ def collect_federated_data(data, message, client_id):
 
     elif message == constants.DEFAULT_NETWORK_END:
         state_dict = CLIENT_NETWORKS[client_id].reconstruct_state_dict()
-        person_binary_classifier = get_default_model().load_last_layer_state_dictionary(state_dict)
+        person_binary_classifier = get_default_model()
+        person_binary_classifier.load_last_layer_state_dictionary(state_dict)
 
         # check if all new models have been added
         for client_id in CLIENT_IDS:

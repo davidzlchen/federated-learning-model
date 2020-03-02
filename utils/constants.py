@@ -33,6 +33,3 @@ Section for Topics
 '''
 
 NEW_CLIENT_INITIALIZATION_TOPIC = 'client_ids'
-
-NETWORK_STALE = 'stale'
-NETWORK_NEW = 'new'
