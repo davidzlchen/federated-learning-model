@@ -133,3 +133,7 @@ class ModelRunner(object):
 
         print('Test Loss: {:.4f} Acc: {:.4f}'.format(
             epoch_loss, epoch_acc))
+
+
+def get_default_model():
+    return PersonBinaryClassifier()
