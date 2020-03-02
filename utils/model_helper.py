@@ -18,4 +18,3 @@ def get_state_dictionary(
         model.load_last_layer_state_dictionary(network_decoded)
 
     return model
-    
