@@ -1,11 +1,16 @@
 from utils import constants
 import numpy as np
+from enum import Enum
 
-DEFAULT_AGGREGATION_SCHEME = constants.AGGREGATITON_SCHEME_AVERAGE
+class AggregationScheme(Enum):
+    AVERAGE=1
+    WEIGHTED_AVERAGE=2 
+
+DEFAULT_AGGREGATION_SCHEME = AggregationScheme.AVERAGE
 
 
 def get_aggregation_scheme(server_model, CLIENT_IDS, CLIENT_NETWORKS):
-    if DEFAULT_AGGREGATION_SCHEME == constants.AGGREGATITON_SCHEME_AVERAGE:
+    if DEFAULT_AGGREGATION_SCHEME == AggregationScheme.AVERAGE:
         return AggregationAverage(server_model, CLIENT_IDS, CLIENT_NETWORKS)
 
 

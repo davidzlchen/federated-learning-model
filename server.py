@@ -1,6 +1,7 @@
 import base64
 import json
 import utils.constants as constants
+from enum import Enum
 
 from common.aggregation_scheme import get_aggregation_scheme
 
@@ -10,6 +11,7 @@ from common import person_classifier
 from common.datablock import Datablock
 from utils.mqtt_helper import MessageType, send_typed_message
 from common.networkblock import Networkblock
+from common.models import get_default_model
 
 app = Flask(__name__)
 app.config['MQTT_BROKER_URL'] = 'localhost'
@@ -17,14 +19,18 @@ app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
 mqtt = Mqtt(app)
 
+class LearningType(Enum):
+    CENTRALIZED=1
+    FEDERATED=2
+
 # global variables
 PACKET_SIZE = 3000
 CLIENT_IDS = set()
 CLIENT_DATABLOCKS = {}
 CLIENT_NETWORKS = {}
 
-CONFIGURATION = constants.CONFIGURATION_FEDERATED
-NETWORK = None
+CONFIGURATION = LearningType.FEDERATED
+NETWORK = get_default_model()
 
 
 @app.route('/')
@@ -59,9 +65,9 @@ def handle_mqtt_message(client, userdata, msg):
 
     client_name = message.topic.split("/")[1]
     if client_name in CLIENT_IDS:
-        if CONFIGURATION == constants.CONFIGURATION_FEDERATED:
+        if CONFIGURATION == LearningType.FEDERATED:
             collect_federated_data(data, message, client_name)
-        elif CONFIGURATION == constants.CONFIGURATION_CENTRALIZED:
+        elif CONFIGURATION == LearningType.CENTRALIZED:
             collect_centralized_data(
                 data, message, client_name, dimensions, label)
 
@@ -78,11 +84,8 @@ def collect_federated_data(data, message, client_id):
         CLIENT_NETWORKS[client_id].add_network_chunk(data)
 
     elif message == constants.DEFAULT_NETWORK_END:
-        person_binary_classifier = CLIENT_NETWORKS[client_id].reconstruct_model(
-        )
-
-        if(NETWORK is None):  # setting of default model should be done somewhere else, but for now I don't know how this should work
-            NETWORK = person_binary_classifier
+        state_dict = CLIENT_NETWORKS[client_id].reconstruct_state_dict()
+        person_binary_classifier = get_default_model().load_last_layer_state_dictionary(state_dict)
 
         # check if all new models have been added
         for client_id in CLIENT_IDS:
@@ -91,6 +94,7 @@ def collect_federated_data(data, message, client_id):
 
         aggregation_scheme = get_aggregation_scheme(
             NETWORK, CLIENT_IDS, CLIENT_NETWORKS)
+
         weights, bias = aggregation_scheme.get_average()
 
         NETWORK.model.fc.state_dict()['weight'].copy_(weights)

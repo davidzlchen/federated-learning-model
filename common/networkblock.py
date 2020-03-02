@@ -6,7 +6,7 @@ class Networkblock(object):
     def __init__(self):
         self.network_string = ""
         self.network_status = constants.NETWORK_STALE
-        self.network = None
+        self.state_dict = None
 
     def add_network_chunk(self, chunk):
         self.network_string += chunk
@@ -15,7 +15,7 @@ class Networkblock(object):
         self.network_string = ""
         self.network_status = constants.NETWORK_STALE
 
-    def reconstruct_model(self):
+    def reconstruct_state_dict(self):
         self.network_status = constants.NETWORK_NEW
-        self.network = get_state_dictionary(network_string=self.network_string)
-        return self.network
+        self.state_dict = get_state_dictionary(network_string=self.network_string)
+        return self.state_dict

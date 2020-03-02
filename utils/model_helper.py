@@ -13,8 +13,6 @@ def get_state_dictionary(
     if USE_LOCAL_NETWORK_CHECKPOINT:
         checkpoint = torch.load(path)
     else:
-        network_decoded = torch.load(BytesIO(base64.decodebytes(network_string.encode())))
-        model = get_default_model()
-        model.load_last_layer_state_dictionary(network_decoded)
+        checkpoint = torch.load(BytesIO(base64.decodebytes(network_string.encode())))
 
-    return model
+    return checkpoint
