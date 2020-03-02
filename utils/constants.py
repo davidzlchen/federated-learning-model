@@ -33,3 +33,11 @@ Section for Topics
 '''
 
 NEW_CLIENT_INITIALIZATION_TOPIC = 'client_ids'
+
+CONFIGURATION_FEDERATED = 'federated'
+CONFIGURATION_CENTRALIZED = 'centralized'
+
+AGGREGATITON_SCHEME_AVERAGE = 'average'
+
+NETWORK_STALE = 'stale'
+NETWORK_NEW = 'new'

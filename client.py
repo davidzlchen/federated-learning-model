@@ -3,6 +3,7 @@ import time
 import json
 import numpy as np
 import uuid
+import torch
 
 import paho.mqtt.client as mqtt
 from common import person_classifier
@@ -96,11 +97,16 @@ def send_model():
             datablock.init_new_image(image.shape, label)
             datablock.image_data[-1] = image
 
+
+
     datablock_dict = {"pi01": datablock}
 
     model = person_classifier.train(datablock_dict)
+
     model.save('./network.pth')
+    
     state_dict = open('./network.pth', 'rb').read()
+    
     publish_encoded_model(state_dict)
 
     print('model_sent!')

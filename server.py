@@ -2,11 +2,14 @@ import base64
 import json
 import utils.constants as constants
 
+from common.aggregation_scheme import get_aggregation_scheme
+
 from flask import Flask
 from flask_mqtt import Mqtt
 from common import person_classifier
 from common.datablock import Datablock
 from utils.mqtt_helper import MessageType, send_typed_message
+from common.networkblock import Networkblock
 
 app = Flask(__name__)
 app.config['MQTT_BROKER_URL'] = 'localhost'
@@ -18,6 +21,10 @@ mqtt = Mqtt(app)
 PACKET_SIZE = 3000
 CLIENT_IDS = set()
 CLIENT_DATABLOCKS = {}
+CLIENT_NETWORKS = {}
+
+CONFIGURATION = constants.CONFIGURATION_FEDERATED
+NETWORK = None
 
 
 @app.route('/')
@@ -52,13 +59,64 @@ def handle_mqtt_message(client, userdata, msg):
 
     client_name = message.topic.split("/")[1]
     if client_name in CLIENT_IDS:
-        if message == constants.DEFAULT_IMAGE_INIT:
-            initialize_new_image(client_name, dimensions, label)
-        elif message == constants.DEFAULT_IMAGE_CHUNK:
-            add_data_chunk(client_name, data)
-        elif message == constants.DEFAULT_IMAGE_END:
-            convert_data(client_name)
+        if CONFIGURATION == constants.CONFIGURATION_FEDERATED:
+            collect_federated_data(data, message, client_name)
+        elif CONFIGURATION == constants.CONFIGURATION_CENTRALIZED:
+            collect_centralized_data(data, message, client_name, dimensions, label)
 
+
+        
+def collect_federated_data(data, message, client_id):
+    global NETWORK
+
+    #get model
+    if message == constants.DEFAULT_NETWORK_INIT:
+        CLIENT_NETWORKS[client_id] = Networkblock()
+        CLIENT_NETWORKS[client_id].destroy_network_data()
+
+    elif message == constants.DEFAULT_NETWORK_CHUNK:
+        CLIENT_NETWORKS[client_id].add_network_chunk(data)
+
+    elif message == constants.DEFAULT_NETWORK_END:
+        person_binary_classifier = CLIENT_NETWORKS[client_id].reconstruct_model()
+
+        if(NETWORK == None): # setting of default model should be done somewhere else, but for now I don't know how this should work
+            NETWORK = person_binary_classifier
+
+        #check if all new models have been added
+        for client_id in CLIENT_IDS:
+            if CLIENT_NETWORKS[client_id].network_status == constants.NETWORK_STALE:
+                return
+
+        aggregation_scheme = get_aggregation_scheme(NETWORK, CLIENT_IDS, CLIENT_NETWORKS)
+        weights, bias = aggregation_scheme.get_average()
+
+        NETWORK.model.fc.state_dict()['weight'].copy_(weights)
+        NETWORK.model.fc.state_dict()['bias'].copy_(bias)
+
+        # reset models to stale and delete old data
+        for client_id in CLIENT_IDS:
+            CLIENT_NETWORKS[client_id].reset_network_data()
+
+        
+        publish_new_model()
+    
+
+def publish_new_model():
+    global NETWORK
+    NETWORK.save('./new_network.pth')
+    state_dict = open('./new_network.pth', 'rb').read()
+    send_network_model(state_dict)
+
+
+
+def collect_centralized_data(data, message, client_name, dimensions, label):
+    if message == constants.DEFAULT_IMAGE_INIT:
+        initialize_new_image(client_name, dimensions, label)
+    elif message == constants.DEFAULT_IMAGE_CHUNK:
+        add_data_chunk(client_name, data)
+    elif message == constants.DEFAULT_IMAGE_END:
+        convert_data(client_name)
 
 def initialize_new_clients(client_id):
     CLIENT_IDS.add(client_id)

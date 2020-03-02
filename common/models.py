@@ -25,7 +25,7 @@ class PersonBinaryClassifier(nn.Module):
         return self.model.fc.state_dict()
 
     def load_last_layer_state_dictionary(self, state_dict):
-        self.model.fc.load_state_dict(state_dict)
+        self.model.fc.load_state_dict(torch.load(state_dict))
         print('Successfully loaded last layer state dictionary.')
 
 
@@ -133,3 +133,7 @@ class ModelRunner(object):
 
         print('Test Loss: {:.4f} Acc: {:.4f}'.format(
             epoch_loss, epoch_acc))
+
+
+def get_default_model():
+    return PersonBinaryClassifier()
