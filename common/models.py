@@ -133,5 +133,8 @@ class ModelRunner(object):
 
         print('Test Loss: {:.4f} Acc: {:.4f}'.format(
             epoch_loss, epoch_acc))
-    def load_state_dict(self, statedict):
-        self.model.load_state_dict(statedict)
+
+
+def get_default_model():
+    return PersonBinaryClassifier()
+
