@@ -2,6 +2,7 @@ import pickle
 import time
 import json
 import numpy as np
+import uuid
 
 import paho.mqtt.client as mqtt
 from common import person_classifier
@@ -12,11 +13,15 @@ from utils.model_helper import get_state_dictionary
 
 NETWORK_STRING = ''
 DEFAULT_BATCH_SIZE = 15
-DEFAULT_TOPIC = 'client/pi01'
+
 DATABLOCK = Datablock()
 DATA_INDEX = 0
 SEND_MODEL = True
 MODEL_TRAIN_SIZE = 25
+
+PI_ID = 'pi{}'.format(uuid.uuid4())
+DEVICE_TOPIC = 'client/{}'.format(PI_ID)
+
 
 ########################################
 # model stuff
@@ -60,11 +65,15 @@ def test():
 
 def publish_encoded_image(image, label):
     sample = (image, label)
-    send_typed_message(client, DEFAULT_TOPIC, sample, MessageType.IMAGE_CHUNK)
+    send_typed_message(client, DEVICE_TOPIC, sample, MessageType.IMAGE_CHUNK)
 
 
 def publish_encoded_model(payload):
-    send_typed_message(client, DEFAULT_TOPIC, payload, MessageType.NETWORK_CHUNK)
+    send_typed_message(
+        client,
+        DEVICE_TOPIC,
+        payload,
+        MessageType.NETWORK_CHUNK)
 
 
 def send_images():
@@ -103,11 +112,13 @@ def send_model(statedict):
     if DATA_INDEX != 0:
         model_runner.load_last_layer_state_dictionary(statedict)
 
+
     model_runner.train_model()
     model_runner.model.save('./network.pth')
-    state_dict = open('./network.pth', 'rb').read()
-    publish_encoded_model(state_dict)
 
+    state_dict = open('./network.pth', 'rb').read()
+
+    publish_encoded_model(state_dict)
 
     print('model_sent!')
 
@@ -115,11 +126,23 @@ def send_model(statedict):
 # mqtt stuff
 #########################################
 
-# The callback for when the client receives a CONNACK response from the server.
+
+def send_client_id():
+    global DEVICE_TOPIC
+    message = {
+        "message": PI_ID
+    }
+    client.subscribe(DEVICE_TOPIC)
+    send_typed_message(
+        client,
+        constants.NEW_CLIENT_INITIALIZATION_TOPIC,
+        message,
+        MessageType.SIMPLE)
 
 
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code " + str(rc))
+    send_client_id()
     client.subscribe("server/network")
     if SEND_MODEL:
         setup_data()
