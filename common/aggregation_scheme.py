@@ -16,9 +16,11 @@ class AggregationAverage():
         self.client_ids = CLIENT_IDS
         self.client_networks = CLIENT_NETWORKS
 
-    def __perform_average(self, weight_dimension, bias_dimension):
-        weights = np.zeros(weight_dimension)
-        bias = np.zeros(bias_dimension)
+    def get_average(self):
+        fc_state_dict = self.server_model.model.fc.state_dict()
+
+        weights = np.zeros(fc_state_dict['weight'].size())
+        bias = np.zeros(fc_state_dict['bias'].size())
 
         for client_id in self.client_ids:
 
@@ -33,10 +35,3 @@ class AggregationAverage():
         bias = np.divide(bias, num_clients)
 
         return (weights, bias)
-
-    def get_average(self):
-        fc_state_dict = self.server_model.model.fc.state_dict()
-
-        return self.__perform_average(
-            fc_state_dict['weight'].size(),
-            fc_state_dict['bias'].size())
