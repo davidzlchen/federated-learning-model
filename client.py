@@ -16,6 +16,7 @@ DEFAULT_TOPIC = 'client/pi01'
 DATABLOCK = Datablock()
 DATA_INDEX = 0
 SEND_MODEL = True
+MODEL_TRAIN_SIZE = 25
 
 ########################################
 # model stuff
@@ -80,13 +81,11 @@ def send_images():
             time.sleep(1)
     print('sent all images!')
 
-
-def send_model():
+def setup_data():
     global DATABLOCK
     global DATA_INDEX
     persons_data = pickle.load(open('./data/personimages.pkl', 'rb'))
     no_persons_data = pickle.load(open('./data/nopersonimages.pkl', 'rb'))
-
 
     for label, images in enumerate([no_persons_data, persons_data]):
         for image, _ in images:
@@ -95,12 +94,17 @@ def send_model():
 
     DATABLOCK.shuffle_data()
 
-    datablock_dict = {'pi01': DATABLOCK[0:25]}
-    DATA_INDEX += 24
+def send_model(statedict):
+    datablock_dict = {'pi01': DATABLOCK[DATA_INDEX:DATA_INDEX+MODEL_TRAIN_SIZE]}
+    DATA_INDEX += MODEL_TRAIN_SIZE
 
+    model_runner = person_classifier.get_model_runner(datablock_dict)
 
-    model = person_classifier.train(datablock_dict)
-    model.save('./network.pth')
+    if DATA_INDEX != 0:
+        model_runner.load_last_layer_state_dictionary(statedict)
+
+    model_runner.train_model()
+    model_runner.model.save('./network.pth')
     state_dict = open('./network.pth', 'rb').read()
     publish_encoded_model(state_dict)
 
@@ -118,7 +122,8 @@ def on_connect(client, userdata, flags, rc):
     print("Connected with result code " + str(rc))
     client.subscribe("server/network")
     if SEND_MODEL:
-        send_model()
+        setup_data()
+        send_model(None)
     else:
         send_images()
 
@@ -140,6 +145,8 @@ def on_message(client, userdata, msg):
     elif message_type == constants.DEFAULT_NETWORK_END:
         print("done, running evaluation on transmitted model")
         test()
+        state_dict = get_state_dictionary(NETWORK_STRING)
+        send_model(state_dict)
     else:
         print('Could not handle message')
 
