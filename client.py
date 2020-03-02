@@ -3,7 +3,6 @@ import time
 import json
 import numpy as np
 import uuid
-import torch
 
 import paho.mqtt.client as mqtt
 from common import person_classifier
