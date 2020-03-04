@@ -17,7 +17,7 @@ DEFAULT_BATCH_SIZE = 15
 DATABLOCK = Datablock()
 DATA_INDEX = 0
 SEND_MODEL = True
-MODEL_TRAIN_SIZE = 25
+MODEL_TRAIN_SIZE = 24
 
 PI_ID = 'pi{}'.format(uuid.uuid4())
 DEVICE_TOPIC = 'client/{}'.format(PI_ID)
@@ -104,14 +104,19 @@ def setup_data():
     DATABLOCK.shuffle_data()
 
 def send_model(statedict):
+    global DATABLOCK
+    global DATA_INDEX
+    global MODEL_TRAIN_SIZE
+
     datablock_dict = {'pi01': DATABLOCK[DATA_INDEX:DATA_INDEX+MODEL_TRAIN_SIZE]}
-    DATA_INDEX += MODEL_TRAIN_SIZE
 
     model_runner = person_classifier.get_model_runner(datablock_dict)
 
     if DATA_INDEX != 0:
-        model_runner.load_last_layer_state_dictionary(statedict)
+        model_runner.model.load_last_layer_state_dictionary(statedict)
 
+    print("training on data {} - {}".format(DATA_INDEX, DATA_INDEX+MODEL_TRAIN_SIZE-1))
+    DATA_INDEX += MODEL_TRAIN_SIZE
 
     model_runner.train_model()
     model_runner.model.save('./network.pth')
