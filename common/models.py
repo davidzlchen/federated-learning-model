@@ -137,4 +137,3 @@ class ModelRunner(object):
 
 def get_default_model():
     return PersonBinaryClassifier()
-

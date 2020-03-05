@@ -14,23 +14,25 @@ class Datablock(object):
         self.dimensions = []
         self.labels = labels
 
-
     def __getitem__(self, key):
         if isinstance(key, int):
-            temp_datablock = Datablock(images = [], labels = [])
-            temp_datablock.init_new_image(self.dimensions[key], self.labels[key])
+            temp_datablock = Datablock(images=[], labels=[])
+            temp_datablock.init_new_image(
+                self.dimensions[key], self.labels[key])
             temp_datablock.image_data[-1] = self.image_data[key]
             return temp_datablock
 
         elif isinstance(key, slice):
-            temp_datablock = Datablock(images = [], labels = [])
+            temp_datablock = Datablock(images=[], labels=[])
             for i in range(key.start, key.stop):
-                temp_datablock.init_new_image(self.dimensions[i], self.labels[i])
+                temp_datablock.init_new_image(
+                    self.dimensions[i], self.labels[i])
                 temp_datablock.image_data[-1] = self.image_data[i]
             return temp_datablock
         else:
-            raise TypeError('Index must be int, not {}'.format(type(key).__name__))
-
+            raise TypeError(
+                'Index must be int, not {}'.format(
+                    type(key).__name__))
 
     def init_new_image(self, dimensions, label):
         self.num_images += 1
@@ -56,5 +58,3 @@ class Datablock(object):
         random.shuffle(zipped)
 
         self.image_data, self.dimensions, self.labels = zip(*zipped)
-
-

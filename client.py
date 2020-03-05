@@ -90,9 +90,9 @@ def send_images():
             time.sleep(1)
     print('sent all images!')
 
+
 def setup_data():
-    global DATABLOCK
-    global DATA_INDEX
+    global DATABLOCK, DATA_INDEX
     persons_data = pickle.load(open('./data/personimages.pkl', 'rb'))
     no_persons_data = pickle.load(open('./data/nopersonimages.pkl', 'rb'))
 
@@ -103,37 +103,42 @@ def setup_data():
 
     DATABLOCK.shuffle_data()
 
-def send_model(statedict):
-    global DATABLOCK
-    global DATA_INDEX
-    global MODEL_TRAIN_SIZE
 
-    print("after: ")
+def send_model(statedict):
+    global DATABLOCK, DATA_INDEX, MODEL_TRAIN_SIZE
+
+    print("State dict before training: ")
     print(statedict)
-    datablock_dict = {'pi01': DATABLOCK[DATA_INDEX:DATA_INDEX+MODEL_TRAIN_SIZE]}
+    datablock_dict = {
+        'pi01': DATABLOCK[DATA_INDEX:DATA_INDEX + MODEL_TRAIN_SIZE]}
 
     model_runner = person_classifier.get_model_runner(datablock_dict)
 
     if DATA_INDEX != 0:
         model_runner.model.load_last_layer_state_dictionary(statedict)
 
-    print("training on data {} - {}".format(DATA_INDEX, DATA_INDEX+MODEL_TRAIN_SIZE-1))
+    print(
+        "Training on images {} to {}".format(
+            DATA_INDEX,
+            DATA_INDEX +
+            MODEL_TRAIN_SIZE -
+            1))
     DATA_INDEX += MODEL_TRAIN_SIZE
 
     model_runner.train_model()
+    print("Successfully trained model. Saving..")
+
     network_name = "./{}network.pth".format(PI_ID)
     model_runner.model.save(network_name)
 
-    print("trained")
+    print("State dict after training: ")
     print(model_runner.model.get_state_dictionary())
 
     state_dict = open(network_name, 'rb').read()
 
-    
-
     publish_encoded_model(state_dict)
 
-    print('model_sent!')
+    print('State dictionary sent to central server!')
 
 #########################################
 # mqtt stuff
@@ -145,7 +150,6 @@ def send_client_id():
     message = {
         "message": PI_ID
     }
-    client.subscribe(DEVICE_TOPIC)
     send_typed_message(
         client,
         constants.NEW_CLIENT_INITIALIZATION_TOPIC,
@@ -167,19 +171,18 @@ def on_message(client, userdata, msg):
     payload = json.loads(msg.payload.decode())
     message_type = payload["message"]
     if message_type == constants.DEFAULT_NETWORK_INIT:
-        print("transmitting network data")
+        print("Transmitting network data...")
         print("-" * 10)
         NETWORK_STRING = ''
     elif message_type == constants.DEFAULT_NETWORK_CHUNK:
         NETWORK_STRING += payload["data"]
     elif message_type == constants.DEFAULT_NETWORK_END:
-        print("done, running evaluation on transmitted model")
-        # test()
+        print("Done, running evaluation on transmitted model...")
         state_dict = get_state_dictionary(NETWORK_STRING)
-
-        print(state_dict)
-        
-        send_model(state_dict)
+        if SEND_MODEL:
+            send_model(state_dict)
+        else:
+            test()
     elif message_type == constants.SEND_CLIENT_DATA:
         if SEND_MODEL:
             setup_data()
@@ -194,7 +197,7 @@ def on_publish(client, userdata, result):
     print("data published")
 
 
-client = mqtt.Client()
+client = mqtt.Client(client_id=PI_ID)
 client.on_connect = on_connect
 client.on_message = on_message
 client.connect("localhost", 1883, 65534)
