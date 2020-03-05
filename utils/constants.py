@@ -28,6 +28,11 @@ DEFAULT_IMAGE_END_MESSAGE = {
     'message': DEFAULT_IMAGE_END
 }
 
+SEND_CLIENT_DATA = 'begin_sending_data'
+SEND_CLIENT_DATA = {
+    'message': SEND_CLIENT_DATA
+}
+
 '''
 Section for Topics
 '''
