@@ -108,6 +108,8 @@ def send_model(statedict):
     global DATA_INDEX
     global MODEL_TRAIN_SIZE
 
+    print("after: ")
+    print(statedict)
     datablock_dict = {'pi01': DATABLOCK[DATA_INDEX:DATA_INDEX+MODEL_TRAIN_SIZE]}
 
     model_runner = person_classifier.get_model_runner(datablock_dict)
@@ -119,9 +121,15 @@ def send_model(statedict):
     DATA_INDEX += MODEL_TRAIN_SIZE
 
     model_runner.train_model()
-    model_runner.model.save('./network.pth')
+    network_name = "./{}network.pth".format(PI_ID)
+    model_runner.model.save(network_name)
 
-    state_dict = open('./network.pth', 'rb').read()
+    print("trained")
+    print(model_runner.model.get_state_dictionary())
+
+    state_dict = open(network_name, 'rb').read()
+
+    
 
     publish_encoded_model(state_dict)
 
@@ -146,16 +154,9 @@ def send_client_id():
 
 
 def on_connect(client, userdata, flags, rc):
-    print("Connected with result code " + str(rc))
     send_client_id()
     client.subscribe("server/network")
-    if SEND_MODEL:
-        setup_data()
-        send_model(None)
-    else:
-        send_images()
-
-    print("publishing images done")
+    print("Connected with result code " + str(rc))
 
 # The callback for when a PUBLISH message is received from the server.
 
@@ -168,13 +169,23 @@ def on_message(client, userdata, msg):
     if message_type == constants.DEFAULT_NETWORK_INIT:
         print("transmitting network data")
         print("-" * 10)
+        NETWORK_STRING = ''
     elif message_type == constants.DEFAULT_NETWORK_CHUNK:
         NETWORK_STRING += payload["data"]
     elif message_type == constants.DEFAULT_NETWORK_END:
         print("done, running evaluation on transmitted model")
-        test()
+        # test()
         state_dict = get_state_dictionary(NETWORK_STRING)
+
+        print(state_dict)
+        
         send_model(state_dict)
+    elif message_type == constants.SEND_CLIENT_DATA:
+        if SEND_MODEL:
+            setup_data()
+            send_model(None)
+        else:
+            send_images()
     else:
         print('Could not handle message')
 
