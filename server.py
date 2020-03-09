@@ -1,21 +1,23 @@
 import torch
+import json
+import sys
+
+from common import person_classifier
+from common.aggregation_scheme import get_aggregation_scheme
+from common.datablock import Datablock
 from common.models import PersonBinaryClassifier
 from common.networkblock import Networkblock, NetworkStatus
-from utils.mqtt_helper import MessageType, send_typed_message
-from common.datablock import Datablock
-from common import person_classifier
+
+from enum import Enum
+
 from flask_mqtt import Mqtt
 from flask import Flask
-from utils.model_helper import get_state_dictionary
-from common.aggregation_scheme import get_aggregation_scheme
-from enum import Enum
-import logging
-import utils.constants as constants
-import json
-import base64
-import sys
-sys.path.append('.')
 
+from utils import constants
+from utils.model_helper import decode_state_dictionary, encode_state_dictionary
+from utils.mqtt_helper import MessageType, send_typed_message
+
+sys.path.append('.')
 
 app = Flask(__name__)
 app.config['MQTT_BROKER_URL'] = 'localhost'
@@ -47,12 +49,6 @@ def index():
         "server/network",
         {'message': constants.SEND_CLIENT_DATA},
         MessageType.SIMPLE)
-
-    # model = person_classifier.train(CLIENT_DATABLOCKS)
-    # model.save('./network.pth')
-    # state_dict = open('./network.pth', 'rb').read()
-    # send_network_model(state_dict)
-
     return "Sent command to accept data."
 
 
@@ -72,7 +68,6 @@ def handle_mqtt_message(client, userdata, msg):
 
     # Add a new client and subscribe to appropriate topic
     if msg.topic == constants.NEW_CLIENT_INITIALIZATION_TOPIC:
-        print('nice')
         initialize_new_clients(message)
         return
 
@@ -104,61 +99,42 @@ def collect_federated_data(data, message, client_id):
         # check if all new models have been added
         for client in CLIENT_IDS:
             if CLIENT_NETWORKS[client].network_status == NetworkStatus.STALE:
-                print("returning because {} is stale.".format(client_id))
+                print("{} is stale, won't average.".format(client_id))
                 return
 
         NETWORK = PersonBinaryClassifier()
         weights, bias = get_aggregation_scheme(
             NETWORK, CLIENT_IDS, CLIENT_NETWORKS)
-
         NETWORK.model.fc.state_dict()['weight'].copy_(weights)
         NETWORK.model.fc.state_dict()['bias'].copy_(bias)
 
         for client in CLIENT_IDS:
-            print("client: {}".format(client))
+            print("Client: {}".format(client))
             print(CLIENT_NETWORKS[client].state_dict)
             print("")
 
-        print("averaged: ")
+        print("Averaged: ")
         print(NETWORK.model.fc.state_dict())
+
+        runner = person_classifier.get_model_runner()
+        runner.model.load_last_layer_state_dictionary(
+            NETWORK.model.fc.state_dict())
+        runner.test_model()
 
         # reset models to stale and delete old data
         for client in CLIENT_IDS:
-            print("reseting")
+            print("Resetting network data for client {}..".format(client))
             CLIENT_NETWORKS[client].reset_network_data()
-
         publish_new_model()
 
 
 def publish_new_model():
     global NETWORK
-    print("NEW")
-    print(NETWORK.model.fc.state_dict())
-    NETWORK.save('./new_network.pth')
-    print("-3")
-    state_dict = open('./new_network.pth', 'rb').read()
 
-    print("-4")
-
-    new_state_dict = torch.load('./new_network.pth')
-
-    print("<-1>")
-
-    new_classifier = PersonBinaryClassifier()
-
-    print("-.5")
-
-    new_classifier.load_last_layer_state_dictionary(new_state_dict)
-    print("<0>")
-
-    print(NETWORK.model.fc.state_dict())
-
-    print("<1>")
-    print(new_classifier.model.fc.state_dict())
-
-    print("<2>")
+    print('Publishing new model to clients..')
+    state_dict = encode_state_dictionary(NETWORK.model.fc.state_dict())
     send_network_model(state_dict)
-    state_dict.close()
+    print('Successfully published new models to clients.')
 
 
 def collect_centralized_data(data, message, client_name, dimensions, label):
@@ -171,7 +147,7 @@ def collect_centralized_data(data, message, client_name, dimensions, label):
 
 
 def initialize_new_clients(client_id):
-    print("connect: {}".format(client_id))
+    print("New client connected: {}".format(client_id))
     CLIENT_IDS.add(client_id)
     initialize_datablocks(client_id)
     mqtt.subscribe('client/' + client_id)
@@ -196,8 +172,6 @@ def convert_data(client_name):
 
     datablock = CLIENT_DATABLOCKS[client_name]
     datablock.convert_current_image_to_matrix()
-
-    print('done')
 
 
 def send_network_model(payload):

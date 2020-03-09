@@ -115,7 +115,7 @@ class ModelRunner(object):
         running_corrects = 0
 
         # Iterate over data.
-        dataloader = self.dataloaders['train']
+        dataloader = self.dataloaders['val']
         dataset_size = len(dataloader.dataset)
         for inputs, labels in dataloader:
             # forward
