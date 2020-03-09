@@ -35,11 +35,9 @@ def send_message(client, topic, message):
 
 def send_network_chunk_message(client, topic, network_data):
     network_message_chunk = constants.DEFAULT_NETWORK_MESSAGE_CHUNK
-    network_data_encoded = base64.b64encode(network_data)
-    network_data_encoded = network_data_encoded.decode('utf-8')
 
     client.publish(topic, json.dumps(constants.DEFAULT_NETWORK_INIT_MESSAGE))
-    for chunk in divide_chunks(network_data_encoded):
+    for chunk in divide_chunks(network_data):
         network_message_chunk['data'] = chunk
         client.publish(topic, json.dumps(network_message_chunk))
     client.publish(topic, json.dumps(constants.DEFAULT_NETWORK_END_MESSAGE))

@@ -9,7 +9,7 @@ from common import person_classifier
 from common.datablock import Datablock
 import utils.constants as constants
 from utils.mqtt_helper import send_typed_message, MessageType, divide_chunks
-from utils.model_helper import get_state_dictionary
+from utils.model_helper import decode_state_dictionary, encode_state_dictionary
 
 NETWORK_STRING = ''
 DEFAULT_BATCH_SIZE = 15
@@ -18,6 +18,7 @@ DATABLOCK = Datablock()
 DATA_INDEX = 0
 SEND_MODEL = True
 MODEL_TRAIN_SIZE = 24
+RUNNER = None
 
 PI_ID = 'pi{}'.format(uuid.uuid4())
 DEVICE_TOPIC = 'client/{}'.format(PI_ID)
@@ -31,32 +32,20 @@ DEVICE_TOPIC = 'client/{}'.format(PI_ID)
 def reconstruct_model():
     global NETWORK_STRING
 
-    state_dict = get_state_dictionary(NETWORK_STRING)
+    state_dict = decode_state_dictionary(NETWORK_STRING)
     return state_dict
 
 
-def test():
-    person_test_samples = pickle.load(
-        open('./data/personimagesTest.pkl', 'rb'))
-    person_test_images = [sample[0] for sample in person_test_samples]
-    no_person_test_samples = pickle.load(
-        open('./data/nopersonimagesTest.pkl', 'rb'))
-    no_person_test_images = [sample[0] for sample in no_person_test_samples]
+def test(reconstruct=False):
+    global RUNNER
 
-    images = np.concatenate((person_test_images, no_person_test_images))
+    if not RUNNER:
+        RUNNER = person_classifier.get_model_runner(None)
+    if reconstruct:
+        state_dictionary = reconstruct_model()
+        RUNNER.model.load_last_layer_state_dictionary(state_dictionary)
 
-    num_test_samples = len(person_test_images)
-    labels = np.concatenate((
-        np.ones(num_test_samples, dtype=np.int_),
-        np.zeros(num_test_samples, dtype=np.int_)
-    ))
-
-    datablocks = {'1': Datablock(images=images, labels=labels)}
-    runner = person_classifier.get_model_runner(datablocks)
-
-    state_dictionary = reconstruct_model()
-    runner.model.load_last_layer_state_dictionary(state_dictionary)
-    runner.test_model()
+    RUNNER.test_model()
 
 ########################################
 # sending stuff
@@ -105,17 +94,17 @@ def setup_data():
 
 
 def send_model(statedict):
-    global DATABLOCK, DATA_INDEX, MODEL_TRAIN_SIZE
+    global DATABLOCK, DATA_INDEX, MODEL_TRAIN_SIZE, RUNNER
 
     print("State dict before training: ")
     print(statedict)
     datablock_dict = {
         'pi01': DATABLOCK[DATA_INDEX:DATA_INDEX + MODEL_TRAIN_SIZE]}
 
-    model_runner = person_classifier.get_model_runner(datablock_dict)
+    RUNNER = person_classifier.get_model_runner(datablock_dict)
 
     if DATA_INDEX != 0:
-        model_runner.model.load_last_layer_state_dictionary(statedict)
+        RUNNER.model.load_last_layer_state_dictionary(statedict)
 
     print(
         "Training on images {} to {}".format(
@@ -125,18 +114,19 @@ def send_model(statedict):
             1))
     DATA_INDEX += MODEL_TRAIN_SIZE
 
-    model_runner.train_model()
-    print("Successfully trained model. Saving..")
+    RUNNER.train_model()
+    print("Successfully trained model.")
+    print(RUNNER.model.get_state_dictionary())
 
-    network_name = "./{}network.pth".format(PI_ID)
-    model_runner.model.save(network_name)
+    test()
+    print("Finished testing model.")
 
     print("State dict after training: ")
-    print(model_runner.model.get_state_dictionary())
+    print(RUNNER.model.get_state_dictionary())
 
-    state_dict = open(network_name, 'rb').read()
-
-    publish_encoded_model(state_dict)
+    state_dict = RUNNER.model.get_state_dictionary()
+    binary_state_dict = encode_state_dictionary(state_dict)
+    publish_encoded_model(binary_state_dict)
 
     print('State dictionary sent to central server!')
 
@@ -178,7 +168,7 @@ def on_message(client, userdata, msg):
         NETWORK_STRING += payload["data"]
     elif message_type == constants.DEFAULT_NETWORK_END:
         print("Done, running evaluation on transmitted model...")
-        state_dict = get_state_dictionary(NETWORK_STRING)
+        state_dict = decode_state_dictionary(NETWORK_STRING)
         if SEND_MODEL:
             send_model(state_dict)
         else:
