@@ -1,3 +1,5 @@
+import pickle
+import numpy as np
 import torchvision
 import torchvision.transforms as transforms
 
@@ -7,14 +9,34 @@ from torch.utils.data import DataLoader
 
 from common.models import PersonBinaryClassifier, ModelRunner
 from common.datasets import CocoDataset, collate_fn
+from common.datablock import Datablock
 
 BATCH_SIZE_TRAIN = 10
 LEARNING_RATE = 0.001
 MOMENTUM = 0.9
 STEP_SIZE = 7
 GAMMA = 0.1
-EPOCHS = 2
+EPOCHS = 5
 LOG_INTERVAL = 10
+
+def get_test_data():
+    person_test_samples = pickle.load(
+        open('./data/personimagesTest.pkl', 'rb'))
+    person_test_images = [sample[0] for sample in person_test_samples[:25]]
+    no_person_test_samples = pickle.load(
+        open('./data/nopersonimagesTest.pkl', 'rb'))
+    no_person_test_images = [sample[0] for sample in no_person_test_samples[:25]]
+
+    images = np.concatenate((person_test_images, no_person_test_images))
+
+    num_test_samples = len(person_test_images)
+    labels = np.concatenate((
+        np.ones(num_test_samples, dtype=np.int_),
+        np.zeros(num_test_samples, dtype=np.int_)
+    ))
+
+    datablocks = {'1': Datablock(images=images, labels=labels)}
+    return datablocks
 
 
 def load_data(datablocks):
@@ -36,8 +58,6 @@ def load_data(datablocks):
         labels=labels
     )
 
-    print(len(people_dataset))
-
     people_data_loader = DataLoader(
         people_dataset,
         batch_size=BATCH_SIZE_TRAIN,
@@ -48,13 +68,13 @@ def load_data(datablocks):
     return people_data_loader
 
 
-def initialize_runner(dataloader, epochs):
+def initialize_runner(train_dataloader, val_dataloader, epochs):
     model = PersonBinaryClassifier()
     criterion = CrossEntropyLoss()
     optimizer_ft = SGD(model.parameters(), lr=LEARNING_RATE, momentum=MOMENTUM)
     exp_lr_scheduler = lr_scheduler.StepLR(
         optimizer_ft, step_size=STEP_SIZE, gamma=GAMMA)
-    dataloaders = {'val': dataloader, 'train': dataloader}
+    dataloaders = {'train': train_dataloader, 'val': val_dataloader}
 
     runner = ModelRunner(
         model=model,
@@ -77,7 +97,8 @@ def test(client_data):
     return runner.test_model()
 
 
-def get_model_runner(client_data, num_epochs=1):
+def get_model_runner(client_data=get_test_data(), num_epochs=EPOCHS):
     people_data_loader = load_data(client_data)
-    runner = initialize_runner(people_data_loader, num_epochs)
+    test_data_loader = load_data(get_test_data())
+    runner = initialize_runner(people_data_loader, test_data_loader, num_epochs)
     return runner

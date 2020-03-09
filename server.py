@@ -6,7 +6,7 @@ from common.datablock import Datablock
 from common import person_classifier
 from flask_mqtt import Mqtt
 from flask import Flask
-from utils.model_helper import get_state_dictionary
+from utils.model_helper import decode_state_dictionary, encode_state_dictionary
 from common.aggregation_scheme import get_aggregation_scheme
 from enum import Enum
 import logging
@@ -14,8 +14,9 @@ import utils.constants as constants
 import json
 import base64
 import sys
-sys.path.append('.')
+import common.person_classifier as person_classifier
 
+sys.path.append('.')
 
 app = Flask(__name__)
 app.config['MQTT_BROKER_URL'] = 'localhost'
@@ -72,7 +73,6 @@ def handle_mqtt_message(client, userdata, msg):
 
     # Add a new client and subscribe to appropriate topic
     if msg.topic == constants.NEW_CLIENT_INITIALIZATION_TOPIC:
-        print('nice')
         initialize_new_clients(message)
         return
 
@@ -122,6 +122,10 @@ def collect_federated_data(data, message, client_id):
         print("averaged: ")
         print(NETWORK.model.fc.state_dict())
 
+        runner = person_classifier.get_model_runner()
+        runner.model.load_last_layer_state_dictionary(NETWORK.model.fc.state_dict())
+        runner.test_model()
+
         # reset models to stale and delete old data
         for client in CLIENT_IDS:
             print("reseting")
@@ -136,7 +140,7 @@ def publish_new_model():
     print(NETWORK.model.fc.state_dict())
     NETWORK.save('./new_network.pth')
     print("-3")
-    state_dict = open('./new_network.pth', 'rb').read()
+    state_dict = encode_state_dictionary(NETWORK.model.fc.state_dict())
 
     print("-4")
 
@@ -158,7 +162,6 @@ def publish_new_model():
 
     print("<2>")
     send_network_model(state_dict)
-    state_dict.close()
 
 
 def collect_centralized_data(data, message, client_name, dimensions, label):
@@ -171,7 +174,7 @@ def collect_centralized_data(data, message, client_name, dimensions, label):
 
 
 def initialize_new_clients(client_id):
-    print("connect: {}".format(client_id))
+    print("New client connected: {}".format(client_id))
     CLIENT_IDS.add(client_id)
     initialize_datablocks(client_id)
     mqtt.subscribe('client/' + client_id)

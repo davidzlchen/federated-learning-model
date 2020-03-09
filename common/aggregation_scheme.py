@@ -24,8 +24,8 @@ def get_average(server_model, CLIENT_IDS, CLIENT_NETWORKS):
     bias = np.zeros(fc_state_dict['bias'].size())
 
     for client_id in CLIENT_IDS:
-
         fc_state_dict = CLIENT_NETWORKS[client_id].state_dict
+        print('[{}]: {}'.format(client_id, fc_state_dict))
         weights = np.add(weights, fc_state_dict['weight'])
         bias = np.add(bias, fc_state_dict['bias'])
 
