@@ -1,10 +1,11 @@
-from utils.model_helper import get_state_dictionary
+from utils.model_helper import decode_state_dictionary
 import utils.constants as constants
 from enum import Enum
 
+
 class NetworkStatus(Enum):
-    STALE=1
-    NEW=2
+    STALE = 1
+    NEW = 2
 
 
 class Networkblock(object):
@@ -22,5 +23,6 @@ class Networkblock(object):
 
     def reconstruct_state_dict(self):
         self.network_status = NetworkStatus.NEW
-        self.state_dict = get_state_dictionary(network_string=self.network_string)
+        self.state_dict = decode_state_dictionary(
+            network_string=self.network_string)
         return self.state_dict
