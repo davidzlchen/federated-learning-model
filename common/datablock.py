@@ -1,4 +1,5 @@
 from utils.image_helper import transform_json_data_to_image_matrix
+import random
 
 
 class Datablock(object):
@@ -12,6 +13,26 @@ class Datablock(object):
         self.image_data = images
         self.dimensions = []
         self.labels = labels
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            temp_datablock = Datablock(images=[], labels=[])
+            temp_datablock.init_new_image(
+                self.dimensions[key], self.labels[key])
+            temp_datablock.image_data[-1] = self.image_data[key]
+            return temp_datablock
+
+        elif isinstance(key, slice):
+            temp_datablock = Datablock(images=[], labels=[])
+            for i in range(key.start, key.stop):
+                temp_datablock.init_new_image(
+                    self.dimensions[i], self.labels[i])
+                temp_datablock.image_data[-1] = self.image_data[i]
+            return temp_datablock
+        else:
+            raise TypeError(
+                'Index must be int, not {}'.format(
+                    type(key).__name__))
 
     def init_new_image(self, dimensions, label):
         self.num_images += 1
@@ -31,3 +52,9 @@ class Datablock(object):
         image_matrix_rep = transform_json_data_to_image_matrix(
             image_ascii_rep, image_dimensions)
         self.image_data[i_idx] = image_matrix_rep
+
+    def shuffle_data(self):
+        zipped = list(zip(self.image_data, self.dimensions, self.labels))
+        random.shuffle(zipped)
+
+        self.image_data, self.dimensions, self.labels = zip(*zipped)

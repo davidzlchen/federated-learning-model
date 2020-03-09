@@ -9,13 +9,20 @@ from common import person_classifier
 from common.datablock import Datablock
 import utils.constants as constants
 from utils.mqtt_helper import send_typed_message, MessageType, divide_chunks
-from utils.model_helper import get_state_dictionary
+from utils.model_helper import decode_state_dictionary, encode_state_dictionary
 
 NETWORK_STRING = ''
 DEFAULT_BATCH_SIZE = 15
+
+DATABLOCK = Datablock()
+DATA_INDEX = 0
+SEND_MODEL = True
+MODEL_TRAIN_SIZE = 24
+RUNNER = None
+
 PI_ID = 'pi{}'.format(uuid.uuid4())
 DEVICE_TOPIC = 'client/{}'.format(PI_ID)
-SEND_MODEL = False
+
 
 ########################################
 # model stuff
@@ -25,32 +32,20 @@ SEND_MODEL = False
 def reconstruct_model():
     global NETWORK_STRING
 
-    state_dict = get_state_dictionary(NETWORK_STRING)
+    state_dict = decode_state_dictionary(NETWORK_STRING)
     return state_dict
 
 
-def test():
-    person_test_samples = pickle.load(
-        open('./data/personimagesTest.pkl', 'rb'))
-    person_test_images = [sample[0] for sample in person_test_samples]
-    no_person_test_samples = pickle.load(
-        open('./data/nopersonimagesTest.pkl', 'rb'))
-    no_person_test_images = [sample[0] for sample in no_person_test_samples]
+def test(reconstruct=False):
+    global RUNNER
 
-    images = np.concatenate((person_test_images, no_person_test_images))
+    if not RUNNER:
+        RUNNER = person_classifier.get_model_runner(None)
+    if reconstruct:
+        state_dictionary = reconstruct_model()
+        RUNNER.model.load_last_layer_state_dictionary(state_dictionary)
 
-    num_test_samples = len(person_test_images)
-    labels = np.concatenate((
-        np.ones(num_test_samples, dtype=np.int_),
-        np.zeros(num_test_samples, dtype=np.int_)
-    ))
-
-    datablocks = {'1': Datablock(images=images, labels=labels)}
-    runner = person_classifier.get_model_runner(datablocks)
-
-    state_dictionary = reconstruct_model()
-    runner.model.load_last_layer_state_dictionary(state_dictionary)
-    runner.test_model()
+    RUNNER.test_model()
 
 ########################################
 # sending stuff
@@ -85,28 +80,55 @@ def send_images():
     print('sent all images!')
 
 
-def send_model():
+def setup_data():
+    global DATABLOCK, DATA_INDEX
     persons_data = pickle.load(open('./data/personimages.pkl', 'rb'))
     no_persons_data = pickle.load(open('./data/nopersonimages.pkl', 'rb'))
 
-    datablock = Datablock()
-
     for label, images in enumerate([no_persons_data, persons_data]):
         for image, _ in images:
-            datablock.init_new_image(image.shape, label)
-            datablock.image_data[-1] = image
+            DATABLOCK.init_new_image(image.shape, label)
+            DATABLOCK.image_data[-1] = image
 
-    datablock_dict = {"pi01": datablock}
+    DATABLOCK.shuffle_data()
 
-    model = person_classifier.train(datablock_dict)
 
-    model.save('./network.pth')
+def send_model(statedict):
+    global DATABLOCK, DATA_INDEX, MODEL_TRAIN_SIZE, RUNNER
 
-    state_dict = open('./network.pth', 'rb').read()
+    print("State dict before training: ")
+    print(statedict)
+    datablock_dict = {
+        'pi01': DATABLOCK[DATA_INDEX:DATA_INDEX + MODEL_TRAIN_SIZE]}
 
-    publish_encoded_model(state_dict)
+    RUNNER = person_classifier.get_model_runner(datablock_dict)
 
-    print('model_sent!')
+    if DATA_INDEX != 0:
+        RUNNER.model.load_last_layer_state_dictionary(statedict)
+
+    print(
+        "Training on images {} to {}".format(
+            DATA_INDEX,
+            DATA_INDEX +
+            MODEL_TRAIN_SIZE -
+            1))
+    DATA_INDEX += MODEL_TRAIN_SIZE
+
+    RUNNER.train_model()
+    print("Successfully trained model.")
+    print(RUNNER.model.get_state_dictionary())
+
+    test()
+    print("Finished testing model.")
+
+    print("State dict after training: ")
+    print(RUNNER.model.get_state_dictionary())
+
+    state_dict = RUNNER.model.get_state_dictionary()
+    binary_state_dict = encode_state_dictionary(state_dict)
+    publish_encoded_model(binary_state_dict)
+
+    print('State dictionary sent to central server!')
 
 #########################################
 # mqtt stuff
@@ -118,7 +140,6 @@ def send_client_id():
     message = {
         "message": PI_ID
     }
-    client.subscribe(DEVICE_TOPIC)
     send_typed_message(
         client,
         constants.NEW_CLIENT_INITIALIZATION_TOPIC,
@@ -127,15 +148,9 @@ def send_client_id():
 
 
 def on_connect(client, userdata, flags, rc):
-    print("Connected with result code " + str(rc))
     send_client_id()
     client.subscribe("server/network")
-    if SEND_MODEL:
-        send_model()
-    else:
-        send_images()
-
-    print("publishing images done")
+    print("Connected with result code " + str(rc))
 
 # The callback for when a PUBLISH message is received from the server.
 
@@ -146,13 +161,24 @@ def on_message(client, userdata, msg):
     payload = json.loads(msg.payload.decode())
     message_type = payload["message"]
     if message_type == constants.DEFAULT_NETWORK_INIT:
-        print("transmitting network data")
+        print("Transmitting network data...")
         print("-" * 10)
+        NETWORK_STRING = ''
     elif message_type == constants.DEFAULT_NETWORK_CHUNK:
         NETWORK_STRING += payload["data"]
     elif message_type == constants.DEFAULT_NETWORK_END:
-        print("done, running evaluation on transmitted model")
-        test()
+        print("Done, running evaluation on transmitted model...")
+        state_dict = decode_state_dictionary(NETWORK_STRING)
+        if SEND_MODEL:
+            send_model(state_dict)
+        else:
+            test()
+    elif message_type == constants.SEND_CLIENT_DATA:
+        if SEND_MODEL:
+            setup_data()
+            send_model(None)
+        else:
+            send_images()
     else:
         print('Could not handle message')
 
@@ -161,7 +187,7 @@ def on_publish(client, userdata, result):
     print("data published")
 
 
-client = mqtt.Client()
+client = mqtt.Client(client_id=PI_ID)
 client.on_connect = on_connect
 client.on_message = on_message
 client.connect("localhost", 1883, 65534)
