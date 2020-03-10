@@ -1,4 +1,7 @@
 import torch
+
+from common.configuration import *
+from utils.mqtt_helper import *
 from common.models import PersonBinaryClassifier
 from common.networkblock import Networkblock, NetworkStatus
 from utils.mqtt_helper import MessageType, send_typed_message
@@ -24,18 +27,12 @@ app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
 mqtt = Mqtt(app, mqtt_logging=True)
 
 
-class LearningType(Enum):
-    CENTRALIZED = 1
-    FEDERATED = 2
-
-
 # global variables
 PACKET_SIZE = 3000
 CLIENT_IDS = set()
 CLIENT_DATABLOCKS = {}
 CLIENT_NETWORKS = {}
-
-CONFIGURATION = LearningType.FEDERATED
+CONFIGURATION = Configuration()
 
 
 @app.route('/')
@@ -54,6 +51,26 @@ def index():
     # send_network_model(state_dict)
 
     return "Sent command to accept data."
+
+
+@app.route('/gui')
+def start_with_configuration():
+    global CLIENT_DATABLOCKS
+
+    # Set global Configuration with input from GUI
+
+    send_configuration_message(
+        mqtt,
+        "server/network",
+        CONFIGURATION)
+
+    send_typed_message(
+        mqtt,
+        "server/network",
+        {'message': constants.SEND_CLIENT_DATA},
+        MessageType.SIMPLE)
+
+    return "Sent configuration command and then command to accept data"
 
 
 @mqtt.on_connect()
@@ -78,9 +95,9 @@ def handle_mqtt_message(client, userdata, msg):
 
     client_name = msg.topic.split("/")[1]
     if client_name in CLIENT_IDS:
-        if CONFIGURATION == LearningType.FEDERATED:
+        if CONFIGURATION.learning_type == LearningType.FEDERATED:
             collect_federated_data(data, message, client_name)
-        elif CONFIGURATION == LearningType.CENTRALIZED:
+        elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
             collect_centralized_data(
                 data, message, client_name, dimensions, label)
 

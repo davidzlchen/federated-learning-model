@@ -10,6 +10,7 @@ from common.datablock import Datablock
 import utils.constants as constants
 from utils.mqtt_helper import send_typed_message, MessageType, divide_chunks
 from utils.model_helper import get_state_dictionary
+from common.configuration import *
 
 NETWORK_STRING = ''
 DEFAULT_BATCH_SIZE = 15
@@ -21,6 +22,8 @@ MODEL_TRAIN_SIZE = 24
 
 PI_ID = 'pi{}'.format(uuid.uuid4())
 DEVICE_TOPIC = 'client/{}'.format(PI_ID)
+
+CONFIGURATION = Configuration()
 
 
 ########################################
@@ -167,6 +170,7 @@ def on_connect(client, userdata, flags, rc):
 
 def on_message(client, userdata, msg):
     global NETWORK_STRING
+    global CONFIGURATION
 
     payload = json.loads(msg.payload.decode())
     message_type = payload["message"]
@@ -184,11 +188,14 @@ def on_message(client, userdata, msg):
         else:
             test()
     elif message_type == constants.SEND_CLIENT_DATA:
-        if SEND_MODEL:
+        if CONFIGURATION.learning_type == LearningType.FEDERATED:
             setup_data()
             send_model(None)
-        else:
+        elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
             send_images()
+    elif message_type == constants.CONFIGURATION_MESSAGE:
+        configuration_object = pickle.loads(payload['data'])
+        CONFIGURATION = configuration_object
     else:
         print('Could not handle message')
 

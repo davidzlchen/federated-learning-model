@@ -33,6 +33,11 @@ SEND_CLIENT_DATA = {
     'message': SEND_CLIENT_DATA
 }
 
+CONFIGURATION_MESSAGE = 'configure_device'
+CONFIGURATION_MESSAGE = {
+    'message': CONFIGURATION_MESSAGE
+}
+
 '''
 Section for Topics
 '''

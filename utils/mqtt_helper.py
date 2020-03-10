@@ -1,5 +1,6 @@
 import base64
 import json
+import pickle
 
 from utils import constants
 from enum import Enum
@@ -11,6 +12,7 @@ class MessageType(Enum):
     NETWORK_CHUNK = 1
     IMAGE_CHUNK = 2
     SIMPLE = 3  # use when short enough to not need chunks
+    CONFIGURATION = 4
 
 
 def is_json(myjson):
@@ -61,11 +63,20 @@ def send_image_chunk_message(client, topic, sample):
     client.publish(topic, json.dumps(constants.DEFAULT_IMAGE_END_MESSAGE))
 
 
+def send_configuration_message(client, topic, configuration_instance):
+    serialized_configuration = pickle.dumps(configuration_instance)
+    message = constants.CONFIGURATION_MESSAGE
+    message['data'] = serialized_configuration
+    send_message(client, topic, message)
+
+
 def send_typed_message(client, topic, message, message_type):
     if message_type is MessageType.NETWORK_CHUNK:
         send_network_chunk_message(client, topic, message)
     elif message_type is MessageType.IMAGE_CHUNK:
         send_image_chunk_message(client, topic, message)
+    elif message_type is MessageType.CONFIGURATION:
+        send_configuration_message(client, topic, message)
     elif message_type is MessageType.SIMPLE:
         send_message(client, topic, message)
     else:
