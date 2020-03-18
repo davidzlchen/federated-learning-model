@@ -3,6 +3,7 @@ import time
 import json
 import numpy as np
 import uuid
+import traceback
 
 import paho.mqtt.client as mqtt
 from common import person_classifier
@@ -95,7 +96,6 @@ def setup_data():
 
 def send_model(statedict):
     global DATABLOCK, DATA_INDEX, MODEL_TRAIN_SIZE, RUNNER
-
     print("State dict before training: ")
     print(statedict)
     datablock_dict = {
@@ -125,7 +125,6 @@ def send_model(statedict):
     publish_encoded_model(binary_state_dict)
 
     print('State dictionary sent to central server!')
-
 #########################################
 # mqtt stuff
 #########################################
