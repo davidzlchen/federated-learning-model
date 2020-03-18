@@ -116,13 +116,9 @@ def send_model(statedict):
 
     RUNNER.train_model()
     print("Successfully trained model.")
-    print(RUNNER.model.get_state_dictionary())
 
     test()
     print("Finished testing model.")
-
-    print("State dict after training: ")
-    print(RUNNER.model.get_state_dictionary())
 
     state_dict = RUNNER.model.get_state_dictionary()
     binary_state_dict = encode_state_dictionary(state_dict)
