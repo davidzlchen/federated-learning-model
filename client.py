@@ -43,7 +43,7 @@ def test(reconstruct=False):
         RUNNER = person_classifier.get_model_runner(None)
     if reconstruct:
         state_dictionary = reconstruct_model()
-        RUNNER.model.load_last_layer_state_dictionary(state_dictionary)
+        RUNNER.model.load_state_dictionary(state_dictionary)
 
     RUNNER.test_model()
 
@@ -104,7 +104,7 @@ def send_model(statedict):
     RUNNER = person_classifier.get_model_runner(datablock_dict)
 
     if DATA_INDEX != 0:
-        RUNNER.model.load_last_layer_state_dictionary(statedict)
+        RUNNER.model.load_state_dictionary(statedict)
 
     print(
         "Training on images {} to {}".format(
