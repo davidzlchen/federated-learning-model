@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
-
+import torchvision.models as models
 from copy import deepcopy
 
 
 class PersonBinaryClassifier(nn.Module):
     def __init__(self):
         super(PersonBinaryClassifier, self).__init__()
-        self.model = torch.hub.load('pytorch/vision:v0.5.0', 'mobilenet_v2', pretrained=True)
+        self.model = models.mobilenet_v2(pretrained=True)
 
     def forward(self, x):
         return self.model.forward(x)
