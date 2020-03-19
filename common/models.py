@@ -122,7 +122,7 @@ class ModelRunner(object):
             # track history if only in train
             outputs = self.model.forward(inputs)
             _, preds = torch.max(outputs, 1)
-            loss = self.criterion(outputs, labels)
+            loss = self.criterion(outputs, labels.long())
 
             # statistics
             running_loss += loss.item() * inputs.size(0)

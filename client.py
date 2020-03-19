@@ -116,8 +116,11 @@ def send_model(statedict):
 
     RUNNER.train_model()
     print("Successfully trained model.")
-
-    test()
+    try:
+        test()
+    except Exception as e:
+        print(e)
+        print(traceback.format_exc())
     print("Finished testing model.")
 
     state_dict = RUNNER.model.get_state_dictionary()
