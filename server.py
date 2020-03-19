@@ -16,6 +16,7 @@ from flask import Flask
 from utils import constants
 from utils.model_helper import decode_state_dictionary, encode_state_dictionary
 from utils.mqtt_helper import MessageType, send_typed_message
+from pprint import pprint
 
 sys.path.append('.')
 
@@ -49,7 +50,7 @@ def index():
         "server/network",
         {'message': constants.SEND_CLIENT_DATA},
         MessageType.SIMPLE)
-    return "Sent command to accept data."
+    return "Sent command to accept data.\n"
 
 
 @mqtt.on_connect()
@@ -92,6 +93,7 @@ def collect_federated_data(data, message, client_id):
         CLIENT_NETWORKS[client_id].add_network_chunk(data)
 
     elif message == constants.DEFAULT_NETWORK_END:
+        print("All chunks received")
         state_dict = CLIENT_NETWORKS[client_id].reconstruct_state_dict()
         person_binary_classifier = PersonBinaryClassifier()
         person_binary_classifier.load_state_dictionary(state_dict)
@@ -102,23 +104,18 @@ def collect_federated_data(data, message, client_id):
                 print("{} is stale, won't average.".format(client_id))
                 return
 
+        #average models
+        averaged_state_dict = get_aggregation_scheme(
+            CLIENT_IDS, CLIENT_NETWORKS)
+
         NETWORK = PersonBinaryClassifier()
-        weights, bias = get_aggregation_scheme(
-            NETWORK, CLIENT_IDS, CLIENT_NETWORKS)
-        NETWORK.model.fc.state_dict()['weight'].copy_(weights)
-        NETWORK.model.fc.state_dict()['bias'].copy_(bias)
+        NETWORK.load_state_dictionary(averaged_state_dict)
 
-        for client in CLIENT_IDS:
-            print("Client: {}".format(client))
-            print(CLIENT_NETWORKS[client].state_dict)
-            print("")
-
-        print("Averaged: ")
-        print(NETWORK.model.fc.state_dict())
+        print("Averaging Finished")
 
         runner = person_classifier.get_model_runner()
         runner.model.load_state_dictionary(
-            NETWORK.model.fc.state_dict())
+            NETWORK.get_state_dictionary())
         runner.test_model()
 
         # reset models to stale and delete old data
@@ -132,7 +129,7 @@ def publish_new_model():
     global NETWORK
 
     print('Publishing new model to clients..')
-    state_dict = encode_state_dictionary(NETWORK.model.fc.state_dict())
+    state_dict = encode_state_dictionary(NETWORK.get_state_dictionary())
     send_network_model(state_dict)
     print('Successfully published new models to clients.')
 

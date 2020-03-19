@@ -96,38 +96,41 @@ def setup_data():
 
 def send_model(statedict):
     global DATABLOCK, DATA_INDEX, MODEL_TRAIN_SIZE, RUNNER
-    print("State dict before training: ")
-    print(statedict)
-    datablock_dict = {
-        'pi01': DATABLOCK[DATA_INDEX:DATA_INDEX + MODEL_TRAIN_SIZE]}
-
-    RUNNER = person_classifier.get_model_runner(datablock_dict)
-
-    if DATA_INDEX != 0:
-        RUNNER.model.load_state_dictionary(statedict)
-
-    print(
-        "Training on images {} to {}".format(
-            DATA_INDEX,
-            DATA_INDEX +
-            MODEL_TRAIN_SIZE -
-            1))
-    DATA_INDEX += MODEL_TRAIN_SIZE
-
-    RUNNER.train_model()
-    print("Successfully trained model.")
     try:
-        test()
+        print("State dict before training: ")
+        print(statedict)
+        datablock_dict = {
+            'pi01': DATABLOCK[DATA_INDEX:DATA_INDEX + MODEL_TRAIN_SIZE]}
+
+        RUNNER = person_classifier.get_model_runner(datablock_dict)
+
+        if DATA_INDEX != 0:
+            RUNNER.model.load_state_dictionary(statedict)
+
+        print(
+            "Training on images {} to {}".format(
+                DATA_INDEX,
+                DATA_INDEX +
+                MODEL_TRAIN_SIZE -
+                1))
+        DATA_INDEX += MODEL_TRAIN_SIZE
+
+        RUNNER.train_model()
+        print("Successfully trained model.")
+        try:
+            test()
+        except Exception as e:
+            print(e)
+            print(traceback.format_exc())
+        print("Finished testing model.")
+
+        state_dict = RUNNER.model.get_state_dictionary()
+        binary_state_dict = encode_state_dictionary(state_dict)
+        publish_encoded_model(binary_state_dict)
+
+        print('State dictionary sent to central server!')
     except Exception as e:
-        print(e)
         print(traceback.format_exc())
-    print("Finished testing model.")
-
-    state_dict = RUNNER.model.get_state_dictionary()
-    binary_state_dict = encode_state_dictionary(state_dict)
-    publish_encoded_model(binary_state_dict)
-
-    print('State dictionary sent to central server!')
 #########################################
 # mqtt stuff
 #########################################
@@ -159,13 +162,13 @@ def on_message(client, userdata, msg):
     payload = json.loads(msg.payload.decode())
     message_type = payload["message"]
     if message_type == constants.DEFAULT_NETWORK_INIT:
-        print("Transmitting network data...")
         print("-" * 10)
+        print("Receiving network data...")
         NETWORK_STRING = ''
     elif message_type == constants.DEFAULT_NETWORK_CHUNK:
         NETWORK_STRING += payload["data"]
     elif message_type == constants.DEFAULT_NETWORK_END:
-        print("Done, running evaluation on transmitted model...")
+        print("Finished receiving network data, loading state dictionary")
         state_dict = decode_state_dictionary(NETWORK_STRING)
         if SEND_MODEL:
             send_model(state_dict)
