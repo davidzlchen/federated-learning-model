@@ -1,7 +1,6 @@
 import pickle
 import numpy as np
-import torchvision
-import torchvision.transforms as transforms
+from torchvision import transforms
 
 from torch.nn import CrossEntropyLoss
 from torch.optim import SGD, lr_scheduler
@@ -51,9 +50,9 @@ def load_data(datablocks):
 
     people_dataset = CocoDataset(
         images,
-        transform=torchvision.transforms.Compose([
-            transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
+        transform=transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ]),

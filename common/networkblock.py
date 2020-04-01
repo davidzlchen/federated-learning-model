@@ -1,5 +1,4 @@
 from utils.model_helper import decode_state_dictionary
-import utils.constants as constants
 from enum import Enum
 
 
