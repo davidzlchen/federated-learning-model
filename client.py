@@ -3,6 +3,7 @@ import time
 import json
 import numpy as np
 import uuid
+import traceback
 
 import paho.mqtt.client as mqtt
 from common import person_classifier
@@ -168,9 +169,19 @@ def on_connect(client, userdata, flags, rc):
 # The callback for when a PUBLISH message is received from the server.
 
 
+def on_log(client, userdata, level, buf):
+    if level != mqtt.MQTT_LOG_DEBUG:
+        print(traceback.format_exc())
+        print("log: ",buf)
+        print("level", level)
+        exit()
+
+
 def on_message(client, userdata, msg):
     global NETWORK_STRING
     global CONFIGURATION
+
+    client.on_log = on_log
 
     payload = json.loads(msg.payload.decode())
     message_type = payload["message"]
@@ -188,16 +199,20 @@ def on_message(client, userdata, msg):
         else:
             test()
     elif message_type == constants.SEND_CLIENT_DATA:
+        print("received start - ", CONFIGURATION.learning_type)
         if CONFIGURATION.learning_type == LearningType.FEDERATED:
+            print("federated")
             setup_data()
             send_model(None)
         elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
+            print("centralized")
             send_images()
-    elif message_type == constants.CONFIGURATION_MESSAGE:
-        configuration_object = pickle.loads(payload['data'])
+        print("end")
+    elif message_type == constants.CONFIGURATION_MESSAGE_SIGNAL:
+        configuration_object = as_configuration(payload['data'])
         CONFIGURATION = configuration_object
     else:
-        print('Could not handle message')
+        print('Could not handle message: ', message_type)
 
 
 def on_publish(client, userdata, result):
