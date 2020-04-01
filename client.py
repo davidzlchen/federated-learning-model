@@ -3,7 +3,6 @@ import time
 import json
 import numpy as np
 import uuid
-import traceback
 
 import paho.mqtt.client as mqtt
 from common import person_classifier
@@ -12,12 +11,14 @@ import utils.constants as constants
 from utils.mqtt_helper import send_typed_message, MessageType, divide_chunks
 from utils.model_helper import decode_state_dictionary, encode_state_dictionary
 
+import traceback
+
 NETWORK_STRING = ''
 DEFAULT_BATCH_SIZE = 15
 
 DATABLOCK = Datablock()
 DATA_INDEX = 0
-SEND_MODEL = True
+SEND_MODEL = False
 MODEL_TRAIN_SIZE = 24
 RUNNER = None
 
@@ -38,15 +39,34 @@ def reconstruct_model():
 
 
 def test(reconstruct=False):
-    global RUNNER
-
-    if not RUNNER:
-        RUNNER = person_classifier.get_model_runner(None)
-    if reconstruct:
+    if not SEND_MODEL:
+        person_test_samples = pickle.load(
+            open('./data/personimagesTest.pkl', 'rb'))
+        person_test_images = [sample[0] for sample in person_test_samples]
+        no_person_test_samples = pickle.load(
+            open('./data/nopersonimagesTest.pkl', 'rb'))
+        no_person_test_images = [sample[0] for sample in no_person_test_samples]
+        images = np.concatenate((person_test_images, no_person_test_images))
+        num_test_samples = len(person_test_images)
+        labels = np.concatenate((
+            np.ones(num_test_samples, dtype=np.int_),
+            np.zeros(num_test_samples, dtype=np.int_)
+        ))
+        datablocks = {'1': Datablock(images=images, labels=labels)}
+        runner = person_classifier.get_model_runner(datablocks)
         state_dictionary = reconstruct_model()
-        RUNNER.model.load_state_dictionary(state_dictionary)
+        runner.model.load_state_dictionary(state_dictionary)
+        runner.test_model()
+    else:
+        global RUNNER
 
-    RUNNER.test_model()
+        if not RUNNER:
+            RUNNER = person_classifier.get_model_runner(None)
+        if reconstruct:
+            state_dictionary = reconstruct_model()
+            RUNNER.model.load_state_dictionary(state_dictionary)
+
+        RUNNER.test_model()
 
 ########################################
 # sending stuff
@@ -80,6 +100,12 @@ def send_images():
             time.sleep(1)
     print('sent all images!')
 
+    end_msg = {
+        'message': 'all_images_sent'
+    }
+
+    send_typed_message(client, DEVICE_TOPIC, json.dumps(end_msg), MessageType.SIMPLE)
+
 
 def setup_data():
     global DATABLOCK, DATA_INDEX
@@ -96,41 +122,34 @@ def setup_data():
 
 def send_model(statedict):
     global DATABLOCK, DATA_INDEX, MODEL_TRAIN_SIZE, RUNNER
-    try:
-        print("State dict before training: ")
-        print(statedict)
-        datablock_dict = {
-            'pi01': DATABLOCK[DATA_INDEX:DATA_INDEX + MODEL_TRAIN_SIZE]}
+    print("State dict before training: ")
+    print(statedict)
+    datablock_dict = {
+        'pi01': DATABLOCK[DATA_INDEX:DATA_INDEX + MODEL_TRAIN_SIZE]}
 
-        RUNNER = person_classifier.get_model_runner(datablock_dict)
+    RUNNER = person_classifier.get_model_runner(datablock_dict)
 
-        if DATA_INDEX != 0:
-            RUNNER.model.load_state_dictionary(statedict)
+    if DATA_INDEX != 0:
+        RUNNER.model.load_state_dictionary(statedict)
 
-        print(
-            "Training on images {} to {}".format(
-                DATA_INDEX,
-                DATA_INDEX +
-                MODEL_TRAIN_SIZE -
-                1))
-        DATA_INDEX += MODEL_TRAIN_SIZE
+    print(
+        "Training on images {} to {}".format(
+            DATA_INDEX,
+            DATA_INDEX +
+            MODEL_TRAIN_SIZE -
+            1))
+    DATA_INDEX += MODEL_TRAIN_SIZE
 
-        RUNNER.train_model()
-        print("Successfully trained model.")
-        try:
-            test()
-        except Exception as e:
-            print(e)
-            print(traceback.format_exc())
-        print("Finished testing model.")
+    RUNNER.train_model()
+    print("Successfully trained model.")
+    test()
+    print("Finished testing model.")
 
-        state_dict = RUNNER.model.get_state_dictionary()
-        binary_state_dict = encode_state_dictionary(state_dict)
-        publish_encoded_model(binary_state_dict)
+    state_dict = RUNNER.model.get_state_dictionary()
+    binary_state_dict = encode_state_dictionary(state_dict)
+    publish_encoded_model(binary_state_dict)
 
-        print('State dictionary sent to central server!')
-    except Exception as e:
-        print(traceback.format_exc())
+    print('State dictionary sent to central server!')
 #########################################
 # mqtt stuff
 #########################################
@@ -168,12 +187,16 @@ def on_message(client, userdata, msg):
     elif message_type == constants.DEFAULT_NETWORK_CHUNK:
         NETWORK_STRING += payload["data"]
     elif message_type == constants.DEFAULT_NETWORK_END:
-        print("Finished receiving network data, loading state dictionary")
-        state_dict = decode_state_dictionary(NETWORK_STRING)
-        if SEND_MODEL:
-            send_model(state_dict)
-        else:
-            test()
+        try:
+            print("Finished receiving network data, loading state dictionary")
+            state_dict = decode_state_dictionary(NETWORK_STRING)
+            if SEND_MODEL:
+                send_model(state_dict)
+            else:
+                test()
+        except Exception as e:
+            print(traceback.format_exc())
+
     elif message_type == constants.SEND_CLIENT_DATA:
         if SEND_MODEL:
             setup_data()

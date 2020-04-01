@@ -1,4 +1,3 @@
-import torch
 import json
 import sys
 
@@ -16,7 +15,6 @@ from flask import Flask
 from utils import constants
 from utils.model_helper import decode_state_dictionary, encode_state_dictionary
 from utils.mqtt_helper import MessageType, send_typed_message
-from pprint import pprint
 
 sys.path.append('.')
 
@@ -38,20 +36,31 @@ CLIENT_IDS = set()
 CLIENT_DATABLOCKS = {}
 CLIENT_NETWORKS = {}
 
-CONFIGURATION = LearningType.FEDERATED
+CONFIGURATION = LearningType.CENTRALIZED
+
+pinged_once = False
 
 
 @app.route('/')
 def index():
     global CLIENT_DATABLOCKS
+    global pinged_once
 
-    send_typed_message(
-        mqtt,
-        "server/network",
-        {'message': constants.SEND_CLIENT_DATA},
-        MessageType.SIMPLE)
-    return "Sent command to accept data.\n"
+    if not pinged_once:
 
+        send_typed_message(
+            mqtt,
+            "server/network",
+            {'message': constants.SEND_CLIENT_DATA},
+            MessageType.SIMPLE)
+        pinged_once = True
+        return "Sent command to receive models.\n"
+    else:
+        if CONFIGURATION == LearningType.CENTRALIZED:
+            pbc = person_classifier.train(CLIENT_DATABLOCKS)
+            encoded = encode_state_dictionary(pbc.model.state_dict())
+            send_network_model(encoded)
+            return 'Sent model to clients'
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
@@ -141,7 +150,8 @@ def collect_centralized_data(data, message, client_name, dimensions, label):
         add_data_chunk(client_name, data)
     elif message == constants.DEFAULT_IMAGE_END:
         convert_data(client_name)
-
+    elif message == 'all_images_sent':
+        print("you can train now")
 
 def initialize_new_clients(client_id):
     print("New client connected: {}".format(client_id))
