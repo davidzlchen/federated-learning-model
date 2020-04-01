@@ -32,7 +32,7 @@ PACKET_SIZE = 3000
 CLIENT_IDS = set()
 CLIENT_DATABLOCKS = {}
 CLIENT_NETWORKS = {}
-CONFIGURATION = Configuration()
+CONFIGURATION = Configuration(LearningType.FEDERATED)
 
 
 @app.route('/')
@@ -81,25 +81,30 @@ def handle_connect(client, userdata, flags, rc):
 
 @mqtt.on_message()
 def handle_mqtt_message(client, userdata, msg):
-    payload = json.loads(msg.payload.decode())
-    dimensions = payload.get("dimensions", None)
-    label = payload.get("label", None)
-    data = payload.get("data", None)
-    message = payload.get("message", None)
+    try:
+        payload = json.loads(msg.payload.decode())
+        dimensions = payload.get("dimensions", None)
+        label = payload.get("label", None)
+        data = payload.get("data", None)
+        message = payload.get("message", None)
 
-    # Add a new client and subscribe to appropriate topic
-    if msg.topic == constants.NEW_CLIENT_INITIALIZATION_TOPIC:
-        print('nice')
-        initialize_new_clients(message)
-        return
+        # Add a new client and subscribe to appropriate topic
+        if msg.topic == constants.NEW_CLIENT_INITIALIZATION_TOPIC:
+            print('nice')
+            initialize_new_clients(message)
+            return
 
-    client_name = msg.topic.split("/")[1]
-    if client_name in CLIENT_IDS:
-        if CONFIGURATION.learning_type == LearningType.FEDERATED:
-            collect_federated_data(data, message, client_name)
-        elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
-            collect_centralized_data(
-                data, message, client_name, dimensions, label)
+        client_name = msg.topic.split("/")[1]
+        if client_name in CLIENT_IDS:
+            if CONFIGURATION.learning_type == LearningType.FEDERATED:
+                collect_federated_data(data, message, client_name)
+            elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
+                collect_centralized_data(
+                    data, message, client_name, dimensions, label)
+
+    except Exception as e:
+        print(e)
+        exit(1)
 
 
 def collect_federated_data(data, message, client_id):

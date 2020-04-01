@@ -2,6 +2,7 @@ import base64
 import json
 import pickle
 
+from common.configuration import ConfigurationEncoder
 from utils import constants
 from enum import Enum
 
@@ -29,9 +30,12 @@ def divide_chunks(array, size=DEFAULT_PACKET_SIZE):
         yield array[idx:idx + size]
 
 
-def send_message(client, topic, message):
+def send_message(client, topic, message, encoder=None):
     if not is_json(message):
-        message = json.dumps(message)
+        if encoder is None:
+            message = json.dumps(message)
+        else:
+            message = json.dumps(message, cls=encoder)
     client.publish(topic, message)
 
 
@@ -64,10 +68,10 @@ def send_image_chunk_message(client, topic, sample):
 
 
 def send_configuration_message(client, topic, configuration_instance):
-    serialized_configuration = pickle.dumps(configuration_instance)
+    #serialized_configuration = pickle.dumps(configuration_instance)
     message = constants.CONFIGURATION_MESSAGE
-    message['data'] = serialized_configuration
-    send_message(client, topic, message)
+    message['data'] = configuration_instance
+    send_message(client, topic, message, encoder=ConfigurationEncoder)
 
 
 def send_typed_message(client, topic, message, message_type):
