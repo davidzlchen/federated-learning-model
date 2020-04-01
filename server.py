@@ -1,4 +1,3 @@
-import torch
 import json
 import sys
 
@@ -37,20 +36,31 @@ CLIENT_IDS = set()
 CLIENT_DATABLOCKS = {}
 CLIENT_NETWORKS = {}
 
-CONFIGURATION = LearningType.FEDERATED
+CONFIGURATION = LearningType.CENTRALIZED
+
+pinged_once = False
 
 
 @app.route('/')
 def index():
     global CLIENT_DATABLOCKS
+    global pinged_once
 
-    send_typed_message(
-        mqtt,
-        "server/network",
-        {'message': constants.SEND_CLIENT_DATA},
-        MessageType.SIMPLE)
-    return "Sent command to accept data."
+    if not pinged_once:
 
+        send_typed_message(
+            mqtt,
+            "server/network",
+            {'message': constants.SEND_CLIENT_DATA},
+            MessageType.SIMPLE)
+        pinged_once = True
+        return "Sent command to receive models.\n"
+    else:
+        if CONFIGURATION == LearningType.CENTRALIZED:
+            pbc = person_classifier.train(CLIENT_DATABLOCKS)
+            encoded = encode_state_dictionary(pbc.model.state_dict())
+            send_network_model(encoded)
+            return 'Sent model to clients'
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
@@ -92,9 +102,10 @@ def collect_federated_data(data, message, client_id):
         CLIENT_NETWORKS[client_id].add_network_chunk(data)
 
     elif message == constants.DEFAULT_NETWORK_END:
+        print("All chunks received")
         state_dict = CLIENT_NETWORKS[client_id].reconstruct_state_dict()
         person_binary_classifier = PersonBinaryClassifier()
-        person_binary_classifier.load_last_layer_state_dictionary(state_dict)
+        person_binary_classifier.load_state_dictionary(state_dict)
 
         # check if all new models have been added
         for client in CLIENT_IDS:
@@ -102,23 +113,18 @@ def collect_federated_data(data, message, client_id):
                 print("{} is stale, won't average.".format(client_id))
                 return
 
+        #average models
+        averaged_state_dict = get_aggregation_scheme(
+            CLIENT_IDS, CLIENT_NETWORKS)
+
         NETWORK = PersonBinaryClassifier()
-        weights, bias = get_aggregation_scheme(
-            NETWORK, CLIENT_IDS, CLIENT_NETWORKS)
-        NETWORK.model.fc.state_dict()['weight'].copy_(weights)
-        NETWORK.model.fc.state_dict()['bias'].copy_(bias)
+        NETWORK.load_state_dictionary(averaged_state_dict)
 
-        for client in CLIENT_IDS:
-            print("Client: {}".format(client))
-            print(CLIENT_NETWORKS[client].state_dict)
-            print("")
-
-        print("Averaged: ")
-        print(NETWORK.model.fc.state_dict())
+        print("Averaging Finished")
 
         runner = person_classifier.get_model_runner()
-        runner.model.load_last_layer_state_dictionary(
-            NETWORK.model.fc.state_dict())
+        runner.model.load_state_dictionary(
+            NETWORK.get_state_dictionary())
         runner.test_model()
 
         # reset models to stale and delete old data
@@ -132,7 +138,7 @@ def publish_new_model():
     global NETWORK
 
     print('Publishing new model to clients..')
-    state_dict = encode_state_dictionary(NETWORK.model.fc.state_dict())
+    state_dict = encode_state_dictionary(NETWORK.get_state_dictionary())
     send_network_model(state_dict)
     print('Successfully published new models to clients.')
 
@@ -144,7 +150,8 @@ def collect_centralized_data(data, message, client_name, dimensions, label):
         add_data_chunk(client_name, data)
     elif message == constants.DEFAULT_IMAGE_END:
         convert_data(client_name)
-
+    elif message == 'all_images_sent':
+        print("you can train now")
 
 def initialize_new_clients(client_id):
     print("New client connected: {}".format(client_id))

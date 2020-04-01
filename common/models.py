@@ -1,31 +1,28 @@
 import torch
 import torch.nn as nn
 import torchvision.models as models
-
 from copy import deepcopy
-
+import traceback
 
 class PersonBinaryClassifier(nn.Module):
     def __init__(self):
         super(PersonBinaryClassifier, self).__init__()
-        resnet = models.resnet50(pretrained=True)
-        for param in resnet.parameters():
-            param.requires_grad = False
-        resnet.fc = nn.Linear(2048, 2)
-        self.model = resnet
+        mobilenet = models.mobilenet_v2(pretrained=True)
+        mobilenet.fc = nn.Linear(2048, 2)
+        self.model = mobilenet
 
     def forward(self, x):
         return self.model.forward(x)
 
     def save(self, path):
-        torch.save(self.model.fc.state_dict(), path)
+        torch.save(self.model.state_dict(), path)
         print("Successfully saved model to: {}".format(path))
 
     def get_state_dictionary(self):
-        return self.model.fc.state_dict()
+        return self.model.state_dict()
 
-    def load_last_layer_state_dictionary(self, state_dict):
-        self.model.fc.load_state_dict(state_dict)
+    def load_state_dictionary(self, state_dict):
+        self.model.load_state_dict(state_dict)
         print('Successfully loaded last layer state dictionary.')
 
 
@@ -75,7 +72,7 @@ class ModelRunner(object):
                     with torch.set_grad_enabled(phase == 'train'):
                         outputs = self.model.forward(inputs)
                         _, preds = torch.max(outputs, 1)
-                        loss = self.criterion(outputs, labels)
+                        loss = self.criterion(outputs, labels.long())
 
                         # backward + optimize only if in training phase
                         if phase == 'train':
@@ -122,7 +119,7 @@ class ModelRunner(object):
             # track history if only in train
             outputs = self.model.forward(inputs)
             _, preds = torch.max(outputs, 1)
-            loss = self.criterion(outputs, labels)
+            loss = self.criterion(outputs, labels.long())
 
             # statistics
             running_loss += loss.item() * inputs.size(0)
