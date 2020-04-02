@@ -7,7 +7,7 @@ from common.datablock import Datablock
 from common.models import PersonBinaryClassifier
 from common.networkblock import Networkblock, NetworkStatus
 
-from enum import Enum
+from utils.enums import LearningType, ClientState
 
 from flask_mqtt import Mqtt
 from flask import Flask
@@ -15,6 +15,8 @@ from flask import Flask
 from utils import constants
 from utils.model_helper import decode_state_dictionary, encode_state_dictionary
 from utils.mqtt_helper import MessageType, send_typed_message
+
+import traceback
 
 sys.path.append('.')
 
@@ -25,16 +27,12 @@ app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
 mqtt = Mqtt(app, mqtt_logging=True)
 
 
-class LearningType(Enum):
-    CENTRALIZED = 1
-    FEDERATED = 2
-
-
 # global variables
 PACKET_SIZE = 3000
-CLIENT_IDS = set()
+CLIENTS = dict()
 CLIENT_DATABLOCKS = {}
 CLIENT_NETWORKS = {}
+NETWORK = None
 
 CONFIGURATION = LearningType.CENTRALIZED
 
@@ -68,6 +66,8 @@ def handle_connect(client, userdata, flags, rc):
     mqtt.subscribe(constants.NEW_CLIENT_INITIALIZATION_TOPIC)
 
 
+
+
 @mqtt.on_message()
 def handle_mqtt_message(client, userdata, msg):
     payload = json.loads(msg.payload.decode())
@@ -81,17 +81,77 @@ def handle_mqtt_message(client, userdata, msg):
         initialize_new_clients(message)
         return
 
+
+
     client_name = msg.topic.split("/")[1]
-    if client_name in CLIENT_IDS:
-        if CONFIGURATION == LearningType.FEDERATED:
+    if client_name in CLIENTS:
+        if CLIENTS[client_name]["learning_type"] == LearningType.FEDERATED:
             collect_federated_data(data, message, client_name)
-        elif CONFIGURATION == LearningType.CENTRALIZED:
+        elif CLIENTS[client_name]["learning_type"] == LearningType.CENTRALIZED:
             collect_centralized_data(
                 data, message, client_name, dimensions, label)
 
 
+    # check if all clients finished sending data
+
+    if all_clients_finished():
+        perform_aggregation_and_send_model()
+
+
+def perform_aggregation_and_send_model():
+    global NETWORK, CLIENTS, CLIENT_NETWORKS
+
+    # Current method averages and then trains
+    try:
+        # Average models
+        averaged_state_dict = get_aggregation_scheme(
+            CLIENTS, CLIENT_NETWORKS)
+
+        if averaged_state_dict is not None:
+            NETWORK = PersonBinaryClassifier()
+            NETWORK.load_state_dictionary(averaged_state_dict)
+
+            print("Averaging Finished")
+
+            # runner = person_classifier.get_model_runner()
+            # runner.model.load_state_dictionary(
+            #     NETWORK.get_state_dictionary())
+            # runner.test_model()
+
+            # reset models to stale and delete old data
+            for client in CLIENTS:
+                print("Resetting network data for client {}..".format(client))
+                CLIENT_NETWORKS[client].reset_network_data()
+
+        if len(CLIENT_DATABLOCKS) != 0:
+            runner = person_classifier.get_model_runner(client_data=CLIENT_DATABLOCKS, num_epochs=1)
+            if averaged_state_dict is not None:
+                runner.model.load_state_dictionary(NETWORK.get_state_dictionary())
+            runner.train_model()
+            encoded = encode_state_dictionary(runner.model.get_state_dictionary())
+        else:
+            encoded = encode_state_dictionary(NETWORK.get_state_dictionary())
+
+        send_network_model(encoded)
+        for client in CLIENTS:
+            CLIENTS[client]["state"] = ClientState.STALE
+    except Exception as e:
+        print(traceback.format_exc())
+
+
+def all_clients_finished():
+    for client_id in CLIENTS:
+        if CLIENTS[client_id]["state"] != ClientState.FINISHED:
+            # print("client {} is not finished".format(client_id))
+            return False
+
+    print("All clients finished")
+
+    return True
+
+
 def collect_federated_data(data, message, client_id):
-    global NETWORK, CLIENT_NETWORKS, CLIENT_IDS
+    global CLIENT_NETWORKS, CLIENTS
 
     # get model
     if message == constants.DEFAULT_NETWORK_INIT:
@@ -107,43 +167,18 @@ def collect_federated_data(data, message, client_id):
         person_binary_classifier = PersonBinaryClassifier()
         person_binary_classifier.load_state_dictionary(state_dict)
 
-        # check if all new models have been added
-        for client in CLIENT_IDS:
-            if CLIENT_NETWORKS[client].network_status == NetworkStatus.STALE:
-                print("{} is stale, won't average.".format(client_id))
-                return
-
-        #average models
-        averaged_state_dict = get_aggregation_scheme(
-            CLIENT_IDS, CLIENT_NETWORKS)
-
-        NETWORK = PersonBinaryClassifier()
-        NETWORK.load_state_dictionary(averaged_state_dict)
-
-        print("Averaging Finished")
-
-        runner = person_classifier.get_model_runner()
-        runner.model.load_state_dictionary(
-            NETWORK.get_state_dictionary())
-        runner.test_model()
-
-        # reset models to stale and delete old data
-        for client in CLIENT_IDS:
-            print("Resetting network data for client {}..".format(client))
-            CLIENT_NETWORKS[client].reset_network_data()
-        publish_new_model()
+        CLIENTS[client_id]["state"] = ClientState.FINISHED
 
 
-def publish_new_model():
-    global NETWORK
-
+def publish_new_model(network):
     print('Publishing new model to clients..')
-    state_dict = encode_state_dictionary(NETWORK.get_state_dictionary())
+    state_dict = encode_state_dictionary(network.get_state_dictionary())
     send_network_model(state_dict)
     print('Successfully published new models to clients.')
 
 
 def collect_centralized_data(data, message, client_name, dimensions, label):
+    global CLIENTS
     if message == constants.DEFAULT_IMAGE_INIT:
         initialize_new_image(client_name, dimensions, label)
     elif message == constants.DEFAULT_IMAGE_CHUNK:
@@ -151,12 +186,17 @@ def collect_centralized_data(data, message, client_name, dimensions, label):
     elif message == constants.DEFAULT_IMAGE_END:
         convert_data(client_name)
     elif message == 'all_images_sent':
+        CLIENTS[client_name]["state"] = ClientState.FINISHED
         print("you can train now")
 
 def initialize_new_clients(client_id):
     print("New client connected: {}".format(client_id))
-    CLIENT_IDS.add(client_id)
-    initialize_datablocks(client_id)
+    CLIENTS[client_id] = {
+        "learning_type": LearningType.FEDERATED,
+        "state": ClientState.STALE}
+
+    if CLIENTS[client_id]["learning_type"] == LearningType.CENTRALIZED:
+        initialize_datablocks(client_id)
     mqtt.subscribe('client/' + client_id)
 
 
