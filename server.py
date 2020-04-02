@@ -22,19 +22,17 @@ from common.clientblock import ClientBlock
 from common.clusterblock import ClusterBlock
 from common import person_classifier
 
-from utils.enums import LearningType, ClientState
-
-from utils.mqtt_helper import MessageType, send_typed_message
-from utils.model_helper import encode_state_dictionary
 from utils import constants
+from utils.enums import LearningType, ClientState
 from utils.model_helper import decode_state_dictionary, encode_state_dictionary
-
+from utils.mqtt_helper import *
 
 sys.path.append('.')
 
 app = Flask(__name__)
 app.config['MQTT_BROKER_URL'] = 'localhost'
 app.config['MQTT_BROKER_PORT'] = 1883
+app.config['MQTT_KEEPALIVE'] = 1000
 app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
 app.config['MQTT_KEEPALIVE'] = 1000
 app.config['SECRET_KEY'] = 'secret!'
@@ -47,6 +45,7 @@ PACKET_SIZE = 3000
 CLIENTS = {}
 CLIENT_DATABLOCKS = {}
 CLIENT_NETWORKS = {}
+CLUSTERS = {}
 NETWORK = None
 
 CONFIGURATION = Configuration(LearningType.FEDERATED)
@@ -54,9 +53,12 @@ CONFIGURATION = Configuration(LearningType.FEDERATED)
 pinged_once = False
 CLUSTERS = {}
 
-# TODO: set global CONFIGURATION with GUI data, not programmer setting
-@app.route('/')
+@app.route('/', methods=['POST'])
 def index():
+    global CLIENT_DATABLOCKS
+    global CONFIGURATION
+    global PINGED_ONCE
+
     clusters = {
         "indoor": LearningType.CENTRALIZED,
         "outdoor": LearningType.FEDERATED,
@@ -64,40 +66,18 @@ def index():
     }
 
     num_clients = 4
+    if request.method == 'POST':
+        body = request.get_json()
+        print(body)
 
-    initialize_server(clusters, num_clients)
-
-
-    send_typed_message(
+        operation_mode = LearningType(body['operationMode'])
+        initialize_server(clusters, num_clients)
+        send_typed_message(
             mqtt,
             'server/general',
             constants.START_LEARNING_MESSAGE,
             MessageType.SIMPLE)
-
-
-    return "server initialized and message sent"
-
-    # global CLIENT_DATABLOCKS
-    # global pinged_once
-    #
-    # if not pinged_once:
-    #
-    #     send_typed_message(
-    #         mqtt,
-    #         "server/network",
-    #         {'message': constants.SEND_CLIENT_DATA},
-    #         MessageType.SIMPLE)
-    #     pinged_once = True
-    #     return "Sent command to receive models.\n"
-    # else:
-    #     if CONFIGURATION == LearningType.CENTRALIZED:
-    #         pbc = person_classifier.train(CLIENT_DATABLOCKS)
-    #         encoded = encode_state_dictionary(pbc.model.state_dict())
-    #         send_network_model(encoded)
-    #         return 'Sent model to clients'
-
-
-
+        return "server initialized and message sent"
 
 @socketio.on('connect')
 def connection():
@@ -368,6 +348,10 @@ def collect_centralized_data(data, message, client_name, dimensions, label):
         CLIENTS[client_name].set_state(ClientState.FINISHED)
         print("All images received from client: {}".format(client_name))
 
+    if NUM_DEVICES_SENT_IMAGE == num_devices:
+        pbc = person_classifier.train(CLIENT_DATABLOCKS)
+        encoded = encode_state_dictionary(pbc.model.state_dict())
+        send_network_model(encoded)
 
 def initialize_new_clients(client_id):
     print("New client connected: {}".format(client_id))
