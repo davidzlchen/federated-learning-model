@@ -1,6 +1,5 @@
 import pickle
 import time
-import json
 import numpy as np
 import uuid
 
@@ -18,7 +17,6 @@ DEFAULT_BATCH_SIZE = 15
 
 DATABLOCK = Datablock()
 DATA_INDEX = 0
-SEND_MODEL = False
 MODEL_TRAIN_SIZE = 24
 RUNNER = None
 CONFIGURATION = Configuration()
@@ -40,7 +38,7 @@ def reconstruct_model():
 
 
 def test(reconstruct=False):
-    if not SEND_MODEL:
+    if CONFIGURATION.learning_type == LearningType.CENTRALIZED:
         person_test_samples = pickle.load(
             open('./data/personimagesTest.pkl', 'rb'))
         person_test_images = [sample[0] for sample in person_test_samples]
@@ -118,6 +116,7 @@ def setup_data():
             DATABLOCK.image_data[-1] = image
 
     DATABLOCK.shuffle_data()
+
 
 def send_model(statedict):
     global DATABLOCK, DATA_INDEX, MODEL_TRAIN_SIZE, RUNNER
@@ -201,7 +200,7 @@ def on_message(client, userdata, msg):
         try:
             print("Finished receiving network data, loading state dictionary")
             state_dict = decode_state_dictionary(NETWORK_STRING)
-            if SEND_MODEL:
+            if CONFIGURATION.learning_type == LearningType.FEDERATED:
                 send_model(state_dict)
             else:
                 test()
@@ -209,13 +208,10 @@ def on_message(client, userdata, msg):
             print(traceback.format_exc())
     elif message_type == constants.SEND_CLIENT_DATA:
         if CONFIGURATION.learning_type == LearningType.FEDERATED:
-            print("federated")
             setup_data()
             send_model(None)
         elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
-            print("centralized")
             send_images()
-        print("end")
     elif message_type == constants.CONFIGURATION_MESSAGE_SIGNAL:
         configuration_object = as_configuration(payload['data'])
         CONFIGURATION = configuration_object
