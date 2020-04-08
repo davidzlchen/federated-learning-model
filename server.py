@@ -1,4 +1,3 @@
-import torch
 from common.configuration import *
 from utils.mqtt_helper import *
 from common.models import PersonBinaryClassifier
@@ -8,14 +7,12 @@ from common.datablock import Datablock
 from common import person_classifier
 from flask_mqtt import Mqtt
 from flask import Flask
-from utils.model_helper import decode_state_dictionary, encode_state_dictionary
+from utils.model_helper import encode_state_dictionary
 from common.aggregation_scheme import get_aggregation_scheme
-from enum import Enum
-import logging
 from utils import constants
 import json
-import base64
 import sys
+import traceback
 sys.path.append('.')
 
 app = Flask(__name__)
@@ -35,12 +32,17 @@ CONFIGURATION = Configuration(LearningType.FEDERATED)
 pinged_once = False
 
 
+# TODO: set global CONFIGURATION with GUI data, not programmer setting
 @app.route('/')
 def index():
     global CLIENT_DATABLOCKS
     global pinged_once
 
     if not pinged_once:
+        send_configuration_message(
+            mqtt,
+            "server/network",
+            CONFIGURATION)
 
         send_typed_message(
             mqtt,
@@ -50,30 +52,12 @@ def index():
         pinged_once = True
         return "Sent command to receive models.\n"
     else:
-        if CONFIGURATION == LearningType.CENTRALIZED:
+        if CONFIGURATION.learning_type == LearningType.CENTRALIZED:
             pbc = person_classifier.train(CLIENT_DATABLOCKS)
             encoded = encode_state_dictionary(pbc.model.state_dict())
             send_network_model(encoded)
             return 'Sent model to clients'
 
-
-@app.route('/gui')
-def start_with_configuration():
-    global CLIENT_DATABLOCKS
-
-    # Set global Configuration with input from GUI
-    send_configuration_message(
-        mqtt,
-        "server/network",
-        CONFIGURATION)
-
-    send_typed_message(
-        mqtt,
-        "server/network",
-        {'message': constants.SEND_CLIENT_DATA},
-        MessageType.SIMPLE)
-
-    return "Sent configuration command and then command to accept data"
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
@@ -92,7 +76,6 @@ def handle_mqtt_message(client, userdata, msg):
 
         # Add a new client and subscribe to appropriate topic
         if msg.topic == constants.NEW_CLIENT_INITIALIZATION_TOPIC:
-            print('nice')
             initialize_new_clients(message)
             return
 
@@ -103,9 +86,13 @@ def handle_mqtt_message(client, userdata, msg):
             elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
                 collect_centralized_data(
                     data, message, client_name, dimensions, label)
+        else:
+            print("Client not initialized correctly (client not in CLIENT_IDS)")
 
     except Exception as e:
         print(e)
+        print(traceback.format_exc())
+        print("Exiting due to error")
         exit(1)
 
 
@@ -128,6 +115,9 @@ def collect_federated_data(data, message, client_id):
 
         # check if all new models have been added
         for client in CLIENT_IDS:
+            if client not in CLIENT_NETWORKS:
+                print(client, " is not in CLIENT_NETWORKS yet")
+                return
             if CLIENT_NETWORKS[client].network_status == NetworkStatus.STALE:
                 print("{} is stale, won't average.".format(client_id))
                 return
@@ -170,6 +160,7 @@ def collect_centralized_data(data, message, client_name, dimensions, label):
         convert_data(client_name)
     elif message == 'all_images_sent':
         print("you can train now")
+
 
 def initialize_new_clients(client_id):
     print("New client connected: {}".format(client_id))
