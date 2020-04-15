@@ -45,8 +45,8 @@ CLUSTERS = {}
 @app.route('/')
 def index():
     clusters = {
-        "indoor": LearningType.FEDERATED,
-        "outdoor": LearningType.CENTRALIZED
+        "indoor": LearningType.CENTRALIZED,
+        "outdoor": LearningType.FEDERATED
     }
 
     initialize_server(clusters, 4)
@@ -143,12 +143,16 @@ def initialize_server(required_clusters, num_clients):
         free_clients = get_free_clients(clients_per_cluster)
         CLUSTERS[cluster_name] = ClusterBlock(free_clients, 'cluster/'+cluster_name, required_clusters[cluster_name])
 
-        print(free_clients)
+        if required_clusters[cluster_name] == LearningType.CENTRALIZED:
+            learning_type = 'centralized'
+        else:
+            learning_type = 'federated'
 
         for client_id in free_clients:
             CLIENTS[client_id].set_learning_type(required_clusters[cluster_name])
             if required_clusters[cluster_name] == LearningType.CENTRALIZED:
                 initialize_datablocks(client_id)
+
 
         # send msg to those clients saying this your cluster (for subscription)
         for client_id in free_clients:
@@ -156,6 +160,7 @@ def initialize_server(required_clusters, num_clients):
             message = {
                 'message': constants.SUBSCRIBE_TO_CLUSTER,
                 constants.CLUSTER_TOPIC_NAME: CLUSTERS[cluster_name].get_mqtt_topic_name(),
+                'learning_type': learning_type,
                 'client_id': client_id
             }
 
@@ -196,6 +201,8 @@ def reset():
 # takes the clients that need to be aggregated as input and sends the model
 def perform_federated_learning(clients, cluster):
     global CLUSTERS, CLIENTS, CLIENT_NETWORKS
+
+    print("averaging for cluster: {}".format(cluster))
 
     averaged_state_dict = get_aggregation_scheme(clients, CLIENT_NETWORKS)
     CLUSTERS[cluster].set_state_dict(averaged_state_dict)

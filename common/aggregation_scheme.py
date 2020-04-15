@@ -10,7 +10,6 @@ DEFAULT_AGGREGATION_SCHEME = AggregationScheme.AVERAGE
 
 def get_aggregation_scheme(CLIENTS, CLIENT_NETWORKS):
     if DEFAULT_AGGREGATION_SCHEME == AggregationScheme.AVERAGE:
-        print("averaging")
         return get_average(CLIENTS, CLIENT_NETWORKS)
 
 
