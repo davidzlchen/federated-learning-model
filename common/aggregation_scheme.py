@@ -12,15 +12,16 @@ def get_aggregation_scheme(CLIENTS, CLIENT_NETWORKS):
         return get_average(CLIENTS, CLIENT_NETWORKS)
 
 
-def get_average(CLIENTS, CLIENT_NETWORKS):
-    clients_iterator = iter(CLIENTS.keys())
+def get_average(clients, client_networks):
+    clients_iterator = iter(clients.keys())
 
+    # get first network to average
     num_federated_clients = 0
     while True: 
         try:
             client_id = next(clients_iterator)
-            if CLIENTS[client_id]["learning_type"] == LearningType.FEDERATED:
-                averaged_state_dict = copy.deepcopy(CLIENT_NETWORKS[client_id].state_dict)
+            if clients[client_id].get_learning_type() == LearningType.FEDERATED:
+                averaged_state_dict = copy.deepcopy(client_networks[client_id].state_dict)
                 num_federated_clients += 1
                 break
         except StopIteration:
@@ -30,17 +31,12 @@ def get_average(CLIENTS, CLIENT_NETWORKS):
     temp_model = PersonBinaryClassifier()
     temp_model.load_state_dictionary(averaged_state_dict)
 
-    for name, param in temp_model.model.named_parameters():
-        print('name: ', name)
-        print(param)
-        print('=====')
-        break
-
+    # average rest of the networks
     while True:
         try:
             client_id = next(clients_iterator)
-            if CLIENTS[client_id]["learning_type"] == LearningType.FEDERATED:
-                client_state_dict = CLIENT_NETWORKS[client_id].state_dict
+            if clients[client_id].get_learning_type() == LearningType.FEDERATED:
+                client_state_dict = client_networks[client_id].state_dict
                 client_model = PersonBinaryClassifier()
                 client_model.load_state_dictionary(client_state_dict)
 

@@ -10,9 +10,9 @@ class Datablock(object):
     ):
         self.num_images = len(images)
         self.current_image = self.num_images - 1
-        self.image_data = images
+        self.image_data = list(images)
         self.dimensions = []
-        self.labels = labels
+        self.labels = list(labels)
 
     def __getitem__(self, key):
         if isinstance(key, int):
@@ -58,3 +58,10 @@ class Datablock(object):
         random.shuffle(zipped)
 
         self.image_data, self.dimensions, self.labels = zip(*zipped)
+
+    def reset(self):
+        self.num_images = 0
+        self.current_image = -1
+        self.image_data = []
+        self.dimensions = []
+        self.labels = []

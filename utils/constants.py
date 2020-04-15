@@ -29,12 +29,16 @@ DEFAULT_IMAGE_END_MESSAGE = {
 }
 
 SEND_CLIENT_DATA = 'begin_sending_data'
-SEND_CLIENT_DATA = {
+SEND_CLIENT_DATA_MESSAGE = {
     'message': SEND_CLIENT_DATA
 }
+
+SUBSCRIBE_TO_CLUSTER = 'subscribe_to_cluster'
 
 '''
 Section for Topics
 '''
 
 NEW_CLIENT_INITIALIZATION_TOPIC = 'client_ids'
+
+CLUSTER_TOPIC_NAME = 'cluster_topic_name'
