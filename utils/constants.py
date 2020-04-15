@@ -33,6 +33,11 @@ SEND_CLIENT_DATA = {
     'message': SEND_CLIENT_DATA
 }
 
+RESULT_DATA_MESSAGE_SIGNAL = 'result_data'
+RESULT_DATA_MESSAGE = {
+    'message': RESULT_DATA_MESSAGE_SIGNAL
+}
+
 '''
 Section for Topics
 '''

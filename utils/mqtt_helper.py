@@ -3,6 +3,7 @@ import json
 
 from utils import constants
 from enum import Enum
+from common.ResultData import ResultDataEncoder
 
 DEFAULT_PACKET_SIZE = 3000
 
@@ -11,6 +12,7 @@ class MessageType(Enum):
     NETWORK_CHUNK = 1
     IMAGE_CHUNK = 2
     SIMPLE = 3  # use when short enough to not need chunks
+    RESULT_DATA = 4
 
 
 def is_json(myjson):
@@ -26,10 +28,12 @@ def divide_chunks(array, size=DEFAULT_PACKET_SIZE):
     for idx in range(0, len_array, size):
         yield array[idx:idx + size]
 
-
-def send_message(client, topic, message):
+def send_message(client, topic, message, encoder=None):
     if not is_json(message):
-        message = json.dumps(message)
+        if encoder is None:
+            message = json.dumps(message)
+        else:
+            message = json.dumps(message, cls=encoder)
     client.publish(topic, message)
 
 
@@ -58,6 +62,10 @@ def send_image_chunk_message(client, topic, sample):
         client.publish(topic, json.dumps(image_message_chunk))
     client.publish(topic, json.dumps(constants.DEFAULT_IMAGE_END_MESSAGE))
 
+def send_result_data_message(client, topic, result_data_instance):
+    message = constants.RESULT_DATA_MESSAGE
+    message['data'] = result_data_instance
+    send_message(client, topic, message, encoder=ResultDataEncoder)
 
 def send_typed_message(client, topic, message, message_type):
     if message_type is MessageType.NETWORK_CHUNK:
@@ -66,5 +74,7 @@ def send_typed_message(client, topic, message, message_type):
         send_image_chunk_message(client, topic, message)
     elif message_type is MessageType.SIMPLE:
         send_message(client, topic, message)
+    elif message_type is MessageType.RESULT_DATA:
+        send_result_data_message(client, topic, message)
     else:
         print('{} not handled'.format(message_type))

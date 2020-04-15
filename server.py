@@ -4,6 +4,7 @@ import sys
 from common import person_classifier
 from common.aggregation_scheme import get_aggregation_scheme
 from common.datablock import Datablock
+from common.ResultData import *
 from common.models import PersonBinaryClassifier
 from common.networkblock import Networkblock, NetworkStatus
 
@@ -81,6 +82,10 @@ def handle_mqtt_message(client, userdata, msg):
         initialize_new_clients(message)
         return
 
+    if message == constants.RESULT_DATA_MESSAGE_SIGNAL:
+        receive_result_data(payload['data'])
+
+
     client_name = msg.topic.split("/")[1]
     if client_name in CLIENT_IDS:
         if CONFIGURATION == LearningType.FEDERATED:
@@ -89,6 +94,11 @@ def handle_mqtt_message(client, userdata, msg):
             collect_centralized_data(
                 data, message, client_name, dimensions, label)
 
+
+def receive_result_data(data):
+    result_data_object = as_configuration(payload['data'])
+    print(result_data_object.test_loss)
+    print(result_data_object.model_accuracy)
 
 def collect_federated_data(data, message, client_id):
     global NETWORK, CLIENT_NETWORKS, CLIENT_IDS
@@ -132,6 +142,7 @@ def collect_federated_data(data, message, client_id):
             print("Resetting network data for client {}..".format(client))
             CLIENT_NETWORKS[client].reset_network_data()
         publish_new_model()
+
 
 
 def publish_new_model():
