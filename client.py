@@ -213,7 +213,7 @@ def on_message(client, userdata, msg):
         if CONFIGURATION.learning_type == LearningType.FEDERATED:
             setup_data()
             send_model(None)
-        else:
+        elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
             send_images()
 
     elif message_type == constants.SUBSCRIBE_TO_CLUSTER:
@@ -227,14 +227,15 @@ def on_message(client, userdata, msg):
         else:
             CONFIGURATION.learning_type = LearningType.CENTRALIZED
 
-
-
         if CLUSTER_TOPIC is not None:
             client.unsubscribe(CLUSTER_TOPIC)
         CLUSTER_TOPIC = payload[constants.CLUSTER_TOPIC_NAME]
 
         print("New cluster topic: {}".format(CLUSTER_TOPIC))
         client.subscribe(CLUSTER_TOPIC)
+
+    elif message_type == constants.RESET_CLIENT:
+        reset_client()
 
     else:
         print(message_type)
@@ -259,6 +260,19 @@ def process_network_data(message_type, payload):
                 test()
         except Exception as e:
             print(traceback.format_exc())
+
+def reset_client():
+    global CONFIGURATION, CLUSTER_TOPIC, NETWORK_STRING, DATABLOCK, DATA_INDEX, RUNNER
+
+    CONFIGURATION.learning_type = LearningType.NONE
+    CLUSTER_TOPIC = None
+    NETWORK_STRING = ''
+
+    DATABLOCK = Datablock()
+    DATA_INDEX = 0
+
+    RUNNER = None
+
 
 def on_publish(client, userdata, result):
     print("data published")

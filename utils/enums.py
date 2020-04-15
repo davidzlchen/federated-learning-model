@@ -2,6 +2,7 @@ from enum import Enum
 
 
 class LearningType(Enum):
+    NONE = 0
     CENTRALIZED = 1
     FEDERATED = 2
     HYBRID = 3

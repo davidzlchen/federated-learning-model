@@ -33,6 +33,12 @@ SEND_CLIENT_DATA_MESSAGE = {
     'message': SEND_CLIENT_DATA
 }
 
+RESET_CLIENT = 'reset_client'
+RESET_CLIENT_MESSAGE = {
+    'message': RESET_CLIENT
+}
+
+
 SUBSCRIBE_TO_CLUSTER = 'subscribe_to_cluster'
 
 '''

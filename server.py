@@ -48,11 +48,11 @@ CLUSTERS = {}
 @app.route('/')
 def index():
     clusters = {
-        "indoor": LearningType.CENTRALIZED,
-        "outdoor": LearningType.FEDERATED
+        "indoor": LearningType.CENTRALIZED
+        # "outdoor": LearningType.FEDERATED
     }
 
-    initialize_server(clusters, 2)
+    initialize_server(clusters, 1)
 
 
     send_typed_message(
@@ -196,11 +196,20 @@ def get_free_clients(num_required):
 
 
 def reset():
-    global CLIENT_NETWORKS, CLIENT_DATABLOCKS, CLUSTERS
+    global CLIENT_NETWORKS, CLIENT_DATABLOCKS, CLUSTERS, CLIENTS
 
     CLIENT_NETWORKS.clear()
     CLIENT_DATABLOCKS.clear()
     CLUSTERS.clear()
+
+    for client in CLIENTS:
+        CLIENTS[client].set_state(ClientState.FREE)
+
+    send_typed_message(
+        mqtt,
+        'server/general',
+        constants.RESET_CLIENT_MESSAGE,
+        MessageType.SIMPLE)
 
 
 # takes the clients that need to be aggregated as input and sends the model
