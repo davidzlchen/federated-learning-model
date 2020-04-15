@@ -5,18 +5,21 @@ from common import person_classifier
 from common.aggregation_scheme import get_aggregation_scheme
 from common.datablock import Datablock
 from common.ResultData import *
+from common.configuration import *
+from utils.mqtt_helper import *
 from common.models import PersonBinaryClassifier
 from common.networkblock import Networkblock, NetworkStatus
-
-from enum import Enum
-
+from utils.mqtt_helper import MessageType, send_typed_message
+from common.datablock import Datablock
+from common import person_classifier
 from flask_mqtt import Mqtt
 from flask import Flask
-
+from utils.model_helper import encode_state_dictionary
+from common.aggregation_scheme import get_aggregation_scheme
 from utils import constants
-from utils.model_helper import decode_state_dictionary, encode_state_dictionary
-from utils.mqtt_helper import MessageType, send_typed_message
-
+import json
+import sys
+import traceback
 sys.path.append('.')
 
 app = Flask(__name__)
@@ -25,29 +28,28 @@ app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
 mqtt = Mqtt(app, mqtt_logging=True)
 
-
-class LearningType(Enum):
-    CENTRALIZED = 1
-    FEDERATED = 2
-
-
 # global variables
 PACKET_SIZE = 3000
 CLIENT_IDS = set()
 CLIENT_DATABLOCKS = {}
 CLIENT_NETWORKS = {}
 
-CONFIGURATION = LearningType.CENTRALIZED
+CONFIGURATION = Configuration(LearningType.FEDERATED)
 
 pinged_once = False
 
 
+# TODO: set global CONFIGURATION with GUI data, not programmer setting
 @app.route('/')
 def index():
     global CLIENT_DATABLOCKS
     global pinged_once
 
     if not pinged_once:
+        send_configuration_message(
+            mqtt,
+            "server/network",
+            CONFIGURATION)
 
         send_typed_message(
             mqtt,
@@ -57,11 +59,12 @@ def index():
         pinged_once = True
         return "Sent command to receive models.\n"
     else:
-        if CONFIGURATION == LearningType.CENTRALIZED:
+        if CONFIGURATION.learning_type == LearningType.CENTRALIZED:
             pbc = person_classifier.train(CLIENT_DATABLOCKS)
             encoded = encode_state_dictionary(pbc.model.state_dict())
             send_network_model(encoded)
             return 'Sent model to clients'
+
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
@@ -71,35 +74,42 @@ def handle_connect(client, userdata, flags, rc):
 
 @mqtt.on_message()
 def handle_mqtt_message(client, userdata, msg):
-    payload = json.loads(msg.payload.decode())
-    dimensions = payload.get("dimensions", None)
-    label = payload.get("label", None)
-    data = payload.get("data", None)
-    message = payload.get("message", None)
+    try:
+        payload = json.loads(msg.payload.decode())
+        dimensions = payload.get("dimensions", None)
+        label = payload.get("label", None)
+        data = payload.get("data", None)
+        message = payload.get("message", None)
 
-    # Add a new client and subscribe to appropriate topic
-    if msg.topic == constants.NEW_CLIENT_INITIALIZATION_TOPIC:
-        initialize_new_clients(message)
-        return
+        # Add a new client and subscribe to appropriate topic
+        if msg.topic == constants.NEW_CLIENT_INITIALIZATION_TOPIC:
+            initialize_new_clients(message)
+            return
+        client_name = msg.topic.split("/")[1]
 
-    if message == constants.RESULT_DATA_MESSAGE_SIGNAL:
-        receive_result_data(payload['data'])
+        if message == constants.RESULT_DATA_MESSAGE_SIGNAL:
+            receive_result_data(client_name, payload['data'])
 
+        if client_name in CLIENT_IDS:
+            if CONFIGURATION.learning_type == LearningType.FEDERATED:
+                collect_federated_data(data, message, client_name)
+            elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
+                collect_centralized_data(
+                    data, message, client_name, dimensions, label)
+        else:
+            print("Client not initialized correctly (client not in CLIENT_IDS)")
 
-    client_name = msg.topic.split("/")[1]
-    if client_name in CLIENT_IDS:
-        if CONFIGURATION == LearningType.FEDERATED:
-            collect_federated_data(data, message, client_name)
-        elif CONFIGURATION == LearningType.CENTRALIZED:
-            collect_centralized_data(
-                data, message, client_name, dimensions, label)
+    except Exception as e:
+        print(e)
+        print(traceback.format_exc())
+        print("Exiting due to error")
+        exit(1)
 
-
-def receive_result_data(data):
-    print(data)
-    result_data_object = as_configuration(data)
-    print("Test Loss: "+result_data_object.test_loss)
-    print("Accuracy: "+result_data_object.model_accuracy)
+def receive_result_data(client_name, data):
+    print(data) # buried under mountain of tensor prints
+    result_data_object = as_result_data(data)
+    print("{}: Test Loss: {}".format(client_name, result_data_object.test_loss))
+    print("{}: Accuracy: {}".format(client_name, result_data_object.model_accuracy))
 
 def collect_federated_data(data, message, client_id):
     global NETWORK, CLIENT_NETWORKS, CLIENT_IDS
@@ -120,6 +130,9 @@ def collect_federated_data(data, message, client_id):
 
         # check if all new models have been added
         for client in CLIENT_IDS:
+            if client not in CLIENT_NETWORKS:
+                print(client, " is not in CLIENT_NETWORKS yet")
+                return
             if CLIENT_NETWORKS[client].network_status == NetworkStatus.STALE:
                 print("{} is stale, won't average.".format(client_id))
                 return
@@ -148,7 +161,6 @@ def collect_federated_data(data, message, client_id):
 
 def publish_new_model():
     global NETWORK
-
     print('Publishing new model to clients..')
     state_dict = encode_state_dictionary(NETWORK.get_state_dictionary())
     send_network_model(state_dict)
@@ -164,6 +176,7 @@ def collect_centralized_data(data, message, client_name, dimensions, label):
         convert_data(client_name)
     elif message == 'all_images_sent':
         print("you can train now")
+
 
 def initialize_new_clients(client_id):
     print("New client connected: {}".format(client_id))

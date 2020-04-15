@@ -1,6 +1,5 @@
 import pickle
 import time
-import json
 import numpy as np
 import uuid
 
@@ -11,7 +10,7 @@ from common.ResultData import *
 import utils.constants as constants
 from utils.mqtt_helper import send_typed_message, MessageType, divide_chunks
 from utils.model_helper import decode_state_dictionary, encode_state_dictionary
-
+from common.configuration import *
 import traceback
 
 NETWORK_STRING = ''
@@ -19,9 +18,9 @@ DEFAULT_BATCH_SIZE = 15
 
 DATABLOCK = Datablock()
 DATA_INDEX = 0
-SEND_MODEL = False
 MODEL_TRAIN_SIZE = 24
 RUNNER = None
+CONFIGURATION = Configuration()
 
 PI_ID = 'pi{}'.format(uuid.uuid4())
 DEVICE_TOPIC = 'client/{}'.format(PI_ID)
@@ -40,7 +39,7 @@ def reconstruct_model():
 
 
 def test(reconstruct=False):
-    if not SEND_MODEL:
+    if CONFIGURATION.learning_type == LearningType.CENTRALIZED:
         person_test_samples = pickle.load(
             open('./data/personimagesTest.pkl', 'rb'))
         person_test_images = [sample[0] for sample in person_test_samples]
@@ -58,6 +57,7 @@ def test(reconstruct=False):
         state_dictionary = reconstruct_model()
         runner.model.load_state_dictionary(state_dictionary)
         ResultData = runner.test_model()
+        send_typed_message(client, DEVICE_TOPIC, ResultData, MessageType.RESULT_DATA)  # send results to server
 
     else:
         global RUNNER
@@ -69,8 +69,7 @@ def test(reconstruct=False):
             RUNNER.model.load_state_dictionary(state_dictionary)
 
         ResultData = RUNNER.test_model()
-
-    send_typed_message(client, DEVICE_TOPIC, ResultData, MessageType.RESULT_DATA) #send results to server
+        return ResultData
 ########################################
 # sending stuff
 ########################################
@@ -106,7 +105,6 @@ def send_images():
     end_msg = {
         'message': 'all_images_sent'
     }
-
     send_typed_message(client, DEVICE_TOPIC, json.dumps(end_msg), MessageType.SIMPLE)
 
 
@@ -145,7 +143,11 @@ def send_model(statedict):
 
     RUNNER.train_model()
     print("Successfully trained model.")
-    test()
+    ResultData = test()
+    print(DATA_INDEX)
+    if(DATA_INDEX>=DATABLOCK.num_images):
+        print("hello")
+        send_typed_message(client, DEVICE_TOPIC, ResultData, MessageType.RESULT_DATA)  # send results to server
     print("Finished testing model.")
 
     state_dict = RUNNER.model.get_state_dictionary()
@@ -153,10 +155,11 @@ def send_model(statedict):
     publish_encoded_model(binary_state_dict)
 
     print('State dictionary sent to central server!')
+
+
 #########################################
 # mqtt stuff
 #########################################
-
 
 def send_client_id():
     global DEVICE_TOPIC
@@ -178,8 +181,19 @@ def on_connect(client, userdata, flags, rc):
 # The callback for when a PUBLISH message is received from the server.
 
 
+def on_log(client, userdata, level, buf):
+    if level != mqtt.MQTT_LOG_DEBUG:
+        print(traceback.format_exc())
+        print("log: ",buf)
+        print("level", level)
+        exit()
+
+
 def on_message(client, userdata, msg):
     global NETWORK_STRING
+    global CONFIGURATION
+
+    client.on_log = on_log
 
     payload = json.loads(msg.payload.decode())
     message_type = payload["message"]
@@ -193,21 +207,23 @@ def on_message(client, userdata, msg):
         try:
             print("Finished receiving network data, loading state dictionary")
             state_dict = decode_state_dictionary(NETWORK_STRING)
-            if SEND_MODEL:
+            if CONFIGURATION.learning_type == LearningType.FEDERATED:
                 send_model(state_dict)
             else:
                 test()
         except Exception as e:
             print(traceback.format_exc())
-
     elif message_type == constants.SEND_CLIENT_DATA:
-        if SEND_MODEL:
+        if CONFIGURATION.learning_type == LearningType.FEDERATED:
             setup_data()
             send_model(None)
-        else:
+        elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
             send_images()
+    elif message_type == constants.CONFIGURATION_MESSAGE_SIGNAL:
+        configuration_object = as_configuration(payload['data'])
+        CONFIGURATION = configuration_object
     else:
-        print('Could not handle message')
+        print('Could not handle message: ', message_type)
 
 
 def on_publish(client, userdata, result):

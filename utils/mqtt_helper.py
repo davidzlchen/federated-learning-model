@@ -1,6 +1,8 @@
 import base64
 import json
+import pickle
 
+from common.configuration import ConfigurationEncoder
 from utils import constants
 from enum import Enum
 from common.ResultData import ResultDataEncoder
@@ -12,7 +14,8 @@ class MessageType(Enum):
     NETWORK_CHUNK = 1
     IMAGE_CHUNK = 2
     SIMPLE = 3  # use when short enough to not need chunks
-    RESULT_DATA = 4
+    CONFIGURATION = 4
+    RESULT_DATA = 5
 
 
 def is_json(myjson):
@@ -27,6 +30,7 @@ def divide_chunks(array, size=DEFAULT_PACKET_SIZE):
     len_array = len(array)
     for idx in range(0, len_array, size):
         yield array[idx:idx + size]
+
 
 def send_message(client, topic, message, encoder=None):
     if not is_json(message):
@@ -67,11 +71,20 @@ def send_result_data_message(client, topic, result_data_instance):
     message['data'] = result_data_instance
     send_message(client, topic, message, encoder=ResultDataEncoder)
 
+def send_configuration_message(client, topic, configuration_instance):
+    #serialized_configuration = pickle.dumps(configuration_instance)
+    message = constants.CONFIGURATION_MESSAGE
+    message['data'] = configuration_instance
+    send_message(client, topic, message, encoder=ConfigurationEncoder)
+
+
 def send_typed_message(client, topic, message, message_type):
     if message_type is MessageType.NETWORK_CHUNK:
         send_network_chunk_message(client, topic, message)
     elif message_type is MessageType.IMAGE_CHUNK:
         send_image_chunk_message(client, topic, message)
+    elif message_type is MessageType.CONFIGURATION:
+        send_configuration_message(client, topic, message)
     elif message_type is MessageType.SIMPLE:
         send_message(client, topic, message)
     elif message_type is MessageType.RESULT_DATA:

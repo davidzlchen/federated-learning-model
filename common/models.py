@@ -40,7 +40,7 @@ class ModelRunner(object):
         self.model = model
         self.criterion = criterion
         self.dataloaders = dataloaders
-        self.epochs = epochs
+        self.epochs = 4
         self.optimizer = optimizer
         self.scheduler = scheduler
 
