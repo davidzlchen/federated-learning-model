@@ -2,11 +2,14 @@ from common.configuration import *
 from utils.mqtt_helper import *
 from common.models import PersonBinaryClassifier
 from common.networkblock import Networkblock, NetworkStatus
+<<<<<<< HEAD
 from common.clientblock import ClientBlock
 from common.clusterblock import ClusterBlock
 
 from utils.enums import LearningType, ClientState
 
+=======
+>>>>>>> master
 from utils.mqtt_helper import MessageType, send_typed_message
 from common.datablock import Datablock
 from common import person_classifier
@@ -15,11 +18,14 @@ from flask import Flask
 from utils.model_helper import encode_state_dictionary
 from common.aggregation_scheme import get_aggregation_scheme
 from utils import constants
+<<<<<<< HEAD
 from utils.model_helper import decode_state_dictionary, encode_state_dictionary
 from utils.mqtt_helper import MessageType, send_typed_message
 
 import traceback
 
+=======
+>>>>>>> master
 import json
 import sys
 import traceback
@@ -44,6 +50,10 @@ pinged_once = False
 NUM_CLIENTS = 2
 CLUSTERS = {}
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> master
 # TODO: set global CONFIGURATION with GUI data, not programmer setting
 @app.route('/')
 def index():
@@ -54,12 +64,21 @@ def index():
 
     initialize_server(clusters, 4)
 
+<<<<<<< HEAD
+=======
+    if not pinged_once:
+        send_configuration_message(
+            mqtt,
+            "server/network",
+            CONFIGURATION)
+>>>>>>> master
 
     send_typed_message(
             mqtt,
             'server/general',
             {'message': constants.SEND_CLIENT_DATA},
             MessageType.SIMPLE)
+<<<<<<< HEAD
 
 
     return "server initialized and message sent"
@@ -84,6 +103,17 @@ def index():
     #         return 'Sent model to clients'
 
 
+=======
+        pinged_once = True
+        return "Sent command to receive models.\n"
+    else:
+        if CONFIGURATION.learning_type == LearningType.CENTRALIZED:
+            pbc = person_classifier.train(CLIENT_DATABLOCKS)
+            encoded = encode_state_dictionary(pbc.model.state_dict())
+            send_network_model(encoded)
+            return 'Sent model to clients'
+>>>>>>> master
+
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
@@ -93,6 +123,7 @@ def handle_connect(client, userdata, flags, rc):
 
 @mqtt.on_message()
 def handle_mqtt_message(client, userdata, msg):
+<<<<<<< HEAD
     global CLUSTERS, faults
 
     payload = json.loads(msg.payload.decode())
@@ -303,6 +334,35 @@ def get_completed_clusters():
             finished_clusters.append(cluster)
 
     return finished_clusters
+=======
+    try:
+        payload = json.loads(msg.payload.decode())
+        dimensions = payload.get("dimensions", None)
+        label = payload.get("label", None)
+        data = payload.get("data", None)
+        message = payload.get("message", None)
+
+        # Add a new client and subscribe to appropriate topic
+        if msg.topic == constants.NEW_CLIENT_INITIALIZATION_TOPIC:
+            initialize_new_clients(message)
+            return
+
+        client_name = msg.topic.split("/")[1]
+        if client_name in CLIENT_IDS:
+            if CONFIGURATION.learning_type == LearningType.FEDERATED:
+                collect_federated_data(data, message, client_name)
+            elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
+                collect_centralized_data(
+                    data, message, client_name, dimensions, label)
+        else:
+            print("Client not initialized correctly (client not in CLIENT_IDS)")
+
+    except Exception as e:
+        print(e)
+        print(traceback.format_exc())
+        print("Exiting due to error")
+        exit(1)
+>>>>>>> master
 
 
 def collect_federated_data(data, message, client_id):
@@ -322,7 +382,46 @@ def collect_federated_data(data, message, client_id):
         person_binary_classifier = PersonBinaryClassifier()
         person_binary_classifier.load_state_dictionary(state_dict)
 
+<<<<<<< HEAD
         CLIENTS[client_id].set_state(ClientState.FINISHED)
+=======
+        # check if all new models have been added
+        for client in CLIENT_IDS:
+            if client not in CLIENT_NETWORKS:
+                print(client, " is not in CLIENT_NETWORKS yet")
+                return
+            if CLIENT_NETWORKS[client].network_status == NetworkStatus.STALE:
+                print("{} is stale, won't average.".format(client_id))
+                return
+
+        #average models
+        averaged_state_dict = get_aggregation_scheme(
+            CLIENT_IDS, CLIENT_NETWORKS)
+
+        NETWORK = PersonBinaryClassifier()
+        NETWORK.load_state_dictionary(averaged_state_dict)
+
+        print("Averaging Finished")
+
+        runner = person_classifier.get_model_runner()
+        runner.model.load_state_dictionary(
+            NETWORK.get_state_dictionary())
+        runner.test_model()
+
+        # reset models to stale and delete old data
+        for client in CLIENT_IDS:
+            print("Resetting network data for client {}..".format(client))
+            CLIENT_NETWORKS[client].reset_network_data()
+        publish_new_model()
+
+
+def publish_new_model():
+    global NETWORK
+    print('Publishing new model to clients..')
+    state_dict = encode_state_dictionary(NETWORK.get_state_dictionary())
+    send_network_model(state_dict)
+    print('Successfully published new models to clients.')
+>>>>>>> master
 
 
 def collect_centralized_data(data, message, client_name, dimensions, label):
