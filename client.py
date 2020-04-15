@@ -18,7 +18,7 @@ DEFAULT_BATCH_SIZE = 15
 
 DATABLOCK = Datablock()
 DATA_INDEX = 0
-SEND_MODEL = True
+SEND_MODEL = True # default Centralized
 MODEL_TRAIN_SIZE = 24
 RUNNER = None
 
@@ -193,7 +193,7 @@ def on_connect(client, userdata, flags, rc):
 
 
 def on_message(client, userdata, msg):
-    global CLUSTER_TOPIC
+    global CLUSTER_TOPIC, SEND_MODEL
 
     payload = json.loads(msg.payload.decode())
     message_type = payload["message"]
@@ -213,6 +213,8 @@ def on_message(client, userdata, msg):
 
         if payload['client_id'] != PI_ID:
             return
+
+        SEND_MODEL = payload['learning_type'] == 'federated'
 
         if CLUSTER_TOPIC is not None:
             client.unsubscribe(CLUSTER_TOPIC)
