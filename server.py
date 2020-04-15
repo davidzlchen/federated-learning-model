@@ -45,11 +45,11 @@ CLUSTERS = {}
 @app.route('/')
 def index():
     clusters = {
-        "indoor": LearningType.CENTRALIZED,
+        "indoor": LearningType.FEDERATED,
         "outdoor": LearningType.CENTRALIZED
     }
 
-    initialize_server(clusters, 2)
+    initialize_server(clusters, 4)
 
 
     send_typed_message(
@@ -108,11 +108,8 @@ def handle_mqtt_message(client, userdata, msg):
         if CLIENTS[client_name].get_learning_type() == LearningType.FEDERATED:
             collect_federated_data(data, message, client_name)
         elif CLIENTS[client_name].get_learning_type() == LearningType.CENTRALIZED:
-            try:
-                collect_centralized_data(
-                    data, message, client_name, dimensions, label)
-            except Exception as e:
-                print(traceback.format_exc())
+            collect_centralized_data(
+                data, message, client_name, dimensions, label)
 
     # check if all clients finished sending data
 
@@ -140,10 +137,13 @@ def initialize_server(required_clusters, num_clients):
         raise ValueError("Number of clients not evenly divisible by number of required cluster.")
 
     clients_per_cluster = num_clients / len(required_clusters)
+    print("clients per cluster: {}".format(clients_per_cluster))
 
     for cluster_name in required_clusters:
         free_clients = get_free_clients(clients_per_cluster)
         CLUSTERS[cluster_name] = ClusterBlock(free_clients, 'cluster/'+cluster_name, required_clusters[cluster_name])
+
+        print(free_clients)
 
         for client_id in free_clients:
             CLIENTS[client_id].set_learning_type(required_clusters[cluster_name])
@@ -152,6 +152,7 @@ def initialize_server(required_clusters, num_clients):
 
         # send msg to those clients saying this your cluster (for subscription)
         for client_id in free_clients:
+
             message = {
                 'message': constants.SUBSCRIBE_TO_CLUSTER,
                 constants.CLUSTER_TOPIC_NAME: CLUSTERS[cluster_name].get_mqtt_topic_name(),
@@ -168,6 +169,8 @@ def initialize_server(required_clusters, num_clients):
 # grabs [num_required] free clients and sets status of clients to STALE
 def get_free_clients(num_required):
     global CLIENTS
+
+    print(CLIENTS)
 
     free_client_ids = []
 

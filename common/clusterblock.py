@@ -2,7 +2,7 @@ from utils.enums import LearningType
 
 class ClusterBlock(object):
     def __init__(self, clients, mqtt_topic_name, learning_type: LearningType, state_dict=None):
-        self.clients = clients
+        self.clients = list(clients)
         self.mqtt_topic_name = mqtt_topic_name
         self.state_dict = state_dict
         self.learning_type = learning_type
