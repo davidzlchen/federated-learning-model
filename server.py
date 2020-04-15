@@ -1,9 +1,5 @@
-import json
-import sys
-
-from common import person_classifier
-from common.aggregation_scheme import get_aggregation_scheme
-from common.datablock import Datablock
+from common.configuration import *
+from utils.mqtt_helper import *
 from common.models import PersonBinaryClassifier
 from common.networkblock import Networkblock, NetworkStatus
 from common.clientblock import ClientBlock
@@ -11,15 +7,22 @@ from common.clusterblock import ClusterBlock
 
 from utils.enums import LearningType, ClientState
 
+from utils.mqtt_helper import MessageType, send_typed_message
+from common.datablock import Datablock
+from common import person_classifier
 from flask_mqtt import Mqtt
 from flask import Flask
-
+from utils.model_helper import encode_state_dictionary
+from common.aggregation_scheme import get_aggregation_scheme
 from utils import constants
 from utils.model_helper import decode_state_dictionary, encode_state_dictionary
 from utils.mqtt_helper import MessageType, send_typed_message
 
 import traceback
 
+import json
+import sys
+import traceback
 sys.path.append('.')
 
 app = Flask(__name__)
@@ -28,7 +31,6 @@ app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
 mqtt = Mqtt(app, mqtt_logging=True)
 
-
 # global variables
 PACKET_SIZE = 3000
 CLIENTS = {}
@@ -36,12 +38,13 @@ CLIENT_DATABLOCKS = {}
 CLIENT_NETWORKS = {}
 NETWORK = None
 
-CONFIGURATION = LearningType.CENTRALIZED
+CONFIGURATION = Configuration(LearningType.FEDERATED)
 
 pinged_once = False
 NUM_CLIENTS = 2
 CLUSTERS = {}
 
+# TODO: set global CONFIGURATION with GUI data, not programmer setting
 @app.route('/')
 def index():
     clusters = {
@@ -81,6 +84,7 @@ def index():
     #         return 'Sent model to clients'
 
 
+
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
     print('connected')
@@ -110,7 +114,8 @@ def handle_mqtt_message(client, userdata, msg):
         elif CLIENTS[client_name].get_learning_type() == LearningType.CENTRALIZED:
             collect_centralized_data(
                 data, message, client_name, dimensions, label)
-
+    else:
+            print("Client not initialized correctly (client not in CLIENT_IDS)")
     # check if all clients finished sending data
 
     finished_clusters = get_completed_clusters()
