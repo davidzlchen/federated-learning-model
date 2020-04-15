@@ -8,7 +8,6 @@ def decode_state_dictionary(
     checkpoint = pickle.loads(
         base64.decodebytes(
             network_string.encode()))
-
     return checkpoint
 
 

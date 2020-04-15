@@ -6,6 +6,7 @@ from common.models import PersonBinaryClassifier
 import copy
 import traceback
 
+
 class AggregationScheme(Enum):
     AVERAGE = 1
     WEIGHTED_AVERAGE = 2
