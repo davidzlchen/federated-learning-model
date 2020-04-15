@@ -48,11 +48,11 @@ CLUSTERS = {}
 @app.route('/')
 def index():
     clusters = {
-        "indoor": LearningType.CENTRALIZED
-        # "outdoor": LearningType.FEDERATED
+        "indoor": LearningType.CENTRALIZED,
+        "outdoor": LearningType.FEDERATED
     }
 
-    initialize_server(clusters, 1)
+    initialize_server(clusters, 4)
 
 
     send_typed_message(
