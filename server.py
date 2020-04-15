@@ -49,7 +49,7 @@ CLUSTERS = {}
 def index():
     clusters = {
         "indoor": LearningType.CENTRALIZED,
-        "outdoor": LearningType.FEDERATED
+        "outdoor": LearningType.CENTRALIZED
     }
 
     initialize_server(clusters, 4)
@@ -58,7 +58,7 @@ def index():
     send_typed_message(
             mqtt,
             'server/general',
-            {'message': constants.SEND_CLIENT_DATA},
+            constants.START_LEARNING_MESSAGE,
             MessageType.SIMPLE)
 
 

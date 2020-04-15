@@ -208,7 +208,7 @@ def on_message(client, userdata, msg):
     if msg.topic == CLUSTER_TOPIC:
         process_network_data(message_type, payload)
 
-    elif message_type == constants.SEND_CLIENT_DATA:
+    elif message_type == constants.START_LEARNING:
         if CONFIGURATION.learning_type == LearningType.FEDERATED:
             setup_data()
             send_model(None)

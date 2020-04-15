@@ -38,6 +38,11 @@ RESET_CLIENT_MESSAGE = {
     'message': RESET_CLIENT
 }
 
+START_LEARNING = 'start_learning'
+START_LEARNING_MESSAGE = {
+    'message': START_LEARNING
+}
+
 
 SUBSCRIBE_TO_CLUSTER = 'subscribe_to_cluster'
 
