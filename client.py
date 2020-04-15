@@ -17,10 +17,6 @@ DEFAULT_BATCH_SIZE = 15
 
 DATABLOCK = Datablock()
 DATA_INDEX = 0
-<<<<<<< HEAD
-
-=======
->>>>>>> master
 MODEL_TRAIN_SIZE = 24
 RUNNER = None
 CONFIGURATION = Configuration()
@@ -204,14 +200,7 @@ def on_log(client, userdata, level, buf):
 
 
 def on_message(client, userdata, msg):
-<<<<<<< HEAD
     global CLUSTER_TOPIC
-=======
-    global NETWORK_STRING
-    global CONFIGURATION
-
-    client.on_log = on_log
->>>>>>> master
 
     payload = json.loads(msg.payload.decode())
     message_type = payload["message"]
@@ -270,7 +259,6 @@ def process_network_data(message_type, payload):
                 test()
         except Exception as e:
             print(traceback.format_exc())
-<<<<<<< HEAD
 
 def reset_client():
     global CONFIGURATION, CLUSTER_TOPIC, NETWORK_STRING, DATABLOCK, DATA_INDEX, RUNNER
@@ -283,19 +271,6 @@ def reset_client():
     DATA_INDEX = 0
 
     RUNNER = None
-=======
-    elif message_type == constants.SEND_CLIENT_DATA:
-        if CONFIGURATION.learning_type == LearningType.FEDERATED:
-            setup_data()
-            send_model(None)
-        elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
-            send_images()
-    elif message_type == constants.CONFIGURATION_MESSAGE_SIGNAL:
-        configuration_object = as_configuration(payload['data'])
-        CONFIGURATION = configuration_object
-    else:
-        print('Could not handle message: ', message_type)
->>>>>>> master
 
 
 def on_publish(client, userdata, result):

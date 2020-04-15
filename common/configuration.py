@@ -1,18 +1,6 @@
-<<<<<<< HEAD
 from utils.enums import LearningType
 import json
 
-=======
-from enum import Enum
-import json
-
-
-class LearningType(int, Enum):
-    CENTRALIZED = 1
-    FEDERATED = 2
-
-
->>>>>>> master
 PUBLIC_ENUMS = {
     'LearningType': LearningType,
 }

@@ -2,15 +2,6 @@ import torch
 from utils.enums import AggregationScheme, LearningType
 from common.models import PersonBinaryClassifier
 import copy
-<<<<<<< HEAD
-=======
-import traceback
-
-
-class AggregationScheme(Enum):
-    AVERAGE = 1
-    WEIGHTED_AVERAGE = 2
->>>>>>> master
 
 import traceback
 

@@ -33,7 +33,6 @@ SEND_CLIENT_DATA_MESSAGE = {
     'message': SEND_CLIENT_DATA
 }
 
-<<<<<<< HEAD
 RESET_CLIENT = 'reset_client'
 RESET_CLIENT_MESSAGE = {
     'message': RESET_CLIENT
@@ -42,13 +41,6 @@ RESET_CLIENT_MESSAGE = {
 
 SUBSCRIBE_TO_CLUSTER = 'subscribe_to_cluster'
 
-=======
-CONFIGURATION_MESSAGE_SIGNAL = 'configure_device'
-CONFIGURATION_MESSAGE = {
-    'message': CONFIGURATION_MESSAGE_SIGNAL
-}
-
->>>>>>> master
 '''
 Section for Topics
 '''
