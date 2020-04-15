@@ -1,6 +1,5 @@
 import pickle
 import time
-import json
 import numpy as np
 import uuid
 
@@ -10,7 +9,7 @@ from common.datablock import Datablock
 import utils.constants as constants
 from utils.mqtt_helper import send_typed_message, MessageType, divide_chunks
 from utils.model_helper import decode_state_dictionary, encode_state_dictionary
-
+from common.configuration import *
 import traceback
 
 NETWORK_STRING = ''
@@ -21,6 +20,7 @@ DATA_INDEX = 0
 SEND_MODEL = True # default Centralized
 MODEL_TRAIN_SIZE = 24
 RUNNER = None
+CONFIGURATION = Configuration()
 
 PI_ID = 'pi{}'.format(uuid.uuid4())
 DEVICE_TOPIC = 'client/{}'.format(PI_ID)
@@ -41,7 +41,7 @@ def reconstruct_model():
 
 
 def test(reconstruct=False):
-    if not SEND_MODEL:
+    if CONFIGURATION.learning_type == LearningType.CENTRALIZED:
         person_test_samples = pickle.load(
             open('./data/personimagesTest.pkl', 'rb'))
         person_test_images = [sample[0] for sample in person_test_samples]
@@ -114,7 +114,6 @@ def send_images():
     end_msg = {
         'message': 'all_images_sent'
     }
-
     send_typed_message(client, DEVICE_TOPIC, json.dumps(end_msg), MessageType.SIMPLE)
 
 
@@ -165,10 +164,11 @@ def send_model(statedict):
     publish_encoded_model(binary_state_dict)
 
     print('State dictionary sent to central server!')
+
+
 #########################################
 # mqtt stuff
 #########################################
-
 
 def send_client_id():
     global DEVICE_TOPIC
@@ -190,6 +190,14 @@ def on_connect(client, userdata, flags, rc):
     print("Connected with result code " + str(rc))
 
 # The callback for when a PUBLISH message is received from the server.
+
+
+def on_log(client, userdata, level, buf):
+    if level != mqtt.MQTT_LOG_DEBUG:
+        print(traceback.format_exc())
+        print("log: ",buf)
+        print("level", level)
+        exit()
 
 
 def on_message(client, userdata, msg):
@@ -214,7 +222,12 @@ def on_message(client, userdata, msg):
         if payload['client_id'] != PI_ID:
             return
 
-        SEND_MODEL = payload['learning_type'] == 'federated'
+        if payload['learning_type'] == 'federated':
+            CONFIGURATION.learning_type = LearningType.FEDERATED
+        else:
+            CONFIGURATION.learning_type = LearningType.CENTRALIZED
+
+        # SEND_MODEL = payload['learning_type'] == 'federated'
 
         if CLUSTER_TOPIC is not None:
             client.unsubscribe(CLUSTER_TOPIC)
@@ -240,7 +253,7 @@ def process_network_data(message_type, payload):
         try:
             print("Finished receiving network data, loading state dictionary")
             state_dict = decode_state_dictionary(NETWORK_STRING)
-            if SEND_MODEL:
+            if CONFIGURATION.learning_type == LearningType.FEDERATED:
                 send_model(state_dict)
             else:
                 test()

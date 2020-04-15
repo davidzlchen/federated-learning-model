@@ -8,7 +8,7 @@ class Datablock(object):
         images=[],
         labels=[]
     ):
-        self.num_images = len(images)
+        self.num_images = len(list(images))
         self.current_image = self.num_images - 1
         self.image_data = list(images)
         self.dimensions = []
