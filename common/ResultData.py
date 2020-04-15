@@ -7,7 +7,9 @@ class ResultData(object):
 class ResultDataEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, ResultData):
-            return {"__resultdata__": "true", "test_loss": str(obj.test_loss), "model_accuracy": str(obj.model_accuracy)}
+            model_acc_str = str(obj.model_accuracy)[7:13]
+            return {"__resultdata__": "true", "test_loss": str(obj.test_loss), "model_accuracy": model_acc_str}
+
         return json.JSONEncoder.default(self, obj)
 
 def as_configuration(dct):
