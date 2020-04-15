@@ -33,6 +33,7 @@ SEND_CLIENT_DATA_MESSAGE = {
     'message': SEND_CLIENT_DATA
 }
 
+<<<<<<< 404044681a53ed9d243b7e691d413529beb2f35d
 RESET_CLIENT = 'reset_client'
 RESET_CLIENT_MESSAGE = {
     'message': RESET_CLIENT
@@ -45,6 +46,11 @@ START_LEARNING_MESSAGE = {
 
 
 SUBSCRIBE_TO_CLUSTER = 'subscribe_to_cluster'
+
+RESULT_DATA_MESSAGE_SIGNAL = 'result_data'
+RESULT_DATA_MESSAGE = {
+    'message': RESULT_DATA_MESSAGE_SIGNAL
+}
 
 '''
 Section for Topics

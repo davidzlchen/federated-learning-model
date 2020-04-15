@@ -1,5 +1,12 @@
 from common.configuration import *
 from utils.mqtt_helper import *
+import json
+import sys
+
+from common import person_classifier
+from common.aggregation_scheme import get_aggregation_scheme
+from common.datablock import Datablock
+from common.ResultData import *
 from common.models import PersonBinaryClassifier
 from common.networkblock import Networkblock, NetworkStatus
 from common.clientblock import ClientBlock
@@ -109,6 +116,10 @@ def handle_mqtt_message(client, userdata, msg):
 
         initialize_new_clients(message)
         return
+
+    if message == constants.RESULT_DATA_MESSAGE_SIGNAL:
+        receive_result_data(payload['data'])
+
 
     client_name = msg.topic.split("/")[1]
     if client_name in CLIENTS:
@@ -305,6 +316,11 @@ def get_completed_clusters():
 
     return finished_clusters
 
+
+def receive_result_data(data):
+    result_data_object = as_configuration(payload['data'])
+    print(result_data_object.test_loss)
+    print(result_data_object.model_accuracy)
 
 def collect_federated_data(data, message, client_id):
     global CLIENT_NETWORKS, CLIENTS
