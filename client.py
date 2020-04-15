@@ -17,7 +17,7 @@ DEFAULT_BATCH_SIZE = 15
 
 DATABLOCK = Datablock()
 DATA_INDEX = 0
-SEND_MODEL = True # default Centralized
+
 MODEL_TRAIN_SIZE = 24
 RUNNER = None
 CONFIGURATION = Configuration()
@@ -201,7 +201,7 @@ def on_log(client, userdata, level, buf):
 
 
 def on_message(client, userdata, msg):
-    global CLUSTER_TOPIC, SEND_MODEL
+    global CLUSTER_TOPIC
 
     payload = json.loads(msg.payload.decode())
     message_type = payload["message"]
@@ -210,7 +210,7 @@ def on_message(client, userdata, msg):
         process_network_data(message_type, payload)
 
     elif message_type == constants.SEND_CLIENT_DATA:
-        if SEND_MODEL:
+        if CONFIGURATION.learning_type == LearningType.FEDERATED:
             setup_data()
             send_model(None)
         else:
@@ -227,7 +227,7 @@ def on_message(client, userdata, msg):
         else:
             CONFIGURATION.learning_type = LearningType.CENTRALIZED
 
-        # SEND_MODEL = payload['learning_type'] == 'federated'
+
 
         if CLUSTER_TOPIC is not None:
             client.unsubscribe(CLUSTER_TOPIC)

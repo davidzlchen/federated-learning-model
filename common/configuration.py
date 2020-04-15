@@ -1,11 +1,5 @@
-from enum import Enum
+from utils.enums import LearningType
 import json
-
-
-class LearningType(int, Enum):
-    CENTRALIZED = 1
-    FEDERATED = 2
-
 
 PUBLIC_ENUMS = {
     'LearningType': LearningType,

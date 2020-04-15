@@ -52,7 +52,7 @@ def index():
         "outdoor": LearningType.FEDERATED
     }
 
-    initialize_server(clusters, 4)
+    initialize_server(clusters, 2)
 
 
     send_typed_message(
