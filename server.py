@@ -96,9 +96,10 @@ def handle_mqtt_message(client, userdata, msg):
 
 
 def receive_result_data(data):
-    result_data_object = as_configuration(payload['data'])
-    print(result_data_object.test_loss)
-    print(result_data_object.model_accuracy)
+    print(data)
+    result_data_object = as_configuration(data)
+    print("Test Loss: "+result_data_object.test_loss)
+    print("Accuracy: "+result_data_object.model_accuracy)
 
 def collect_federated_data(data, message, client_id):
     global NETWORK, CLIENT_NETWORKS, CLIENT_IDS
