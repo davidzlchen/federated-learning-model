@@ -18,12 +18,14 @@ DEFAULT_BATCH_SIZE = 15
 
 DATABLOCK = Datablock()
 DATA_INDEX = 0
-SEND_MODEL = True
+SEND_MODEL = False
 MODEL_TRAIN_SIZE = 24
 RUNNER = None
 
 PI_ID = 'pi{}'.format(uuid.uuid4())
 DEVICE_TOPIC = 'client/{}'.format(PI_ID)
+
+CLUSTER_TOPIC = None
 
 
 ########################################
@@ -91,13 +93,22 @@ def send_images():
     no_persons_data = pickle.load(open('./data/nopersonimages.pkl', 'rb'))
 
     batch_size = DEFAULT_BATCH_SIZE
+    counter = 0
     for label, images in enumerate([no_persons_data, persons_data]):
-        for chunk in divide_chunks(images, batch_size):
-            for sample in chunk:
-                image, _ = sample
-                publish_encoded_image(image, label)
-            print('Sleep after sending batch of {}'.format(batch_size))
-            time.sleep(1)
+
+        # for chunk in divide_chunks(images, batch_size):
+        #     for sample in chunk:
+        #         image, _ = sample
+        #         publish_encoded_image(image, label)
+        #     print('Sleep after sending batch of {}'.format(batch_size))
+        #     time.sleep(1)
+
+        for image, attributes in images:
+            publish_encoded_image(image, label)
+            counter += 1
+            if counter % 15 == 0:
+                time.sleep(1)
+                print('{} images sent, sleeping for 1 second.'.format(batch_size))
     print('sent all images!')
 
     end_msg = {
@@ -169,17 +180,50 @@ def send_client_id():
 
 def on_connect(client, userdata, flags, rc):
     send_client_id()
-    client.subscribe("server/network")
+
+    client.subscribe("server/general")
+    # client.subscribe("server/network")
     print("Connected with result code " + str(rc))
 
 # The callback for when a PUBLISH message is received from the server.
 
 
 def on_message(client, userdata, msg):
-    global NETWORK_STRING
+    global CLUSTER_TOPIC
 
     payload = json.loads(msg.payload.decode())
     message_type = payload["message"]
+
+    if msg.topic == CLUSTER_TOPIC:
+        process_network_data(message_type, payload)
+
+    elif message_type == constants.SEND_CLIENT_DATA:
+        if SEND_MODEL:
+            setup_data()
+            send_model(None)
+        else:
+            send_images()
+
+    elif message_type == constants.SUBSCRIBE_TO_CLUSTER:
+        # remove current cluster topic and subscribe to new cluster topic
+
+        if payload['client_id'] != PI_ID:
+            return
+
+        if CLUSTER_TOPIC is not None:
+            client.unsubscribe(CLUSTER_TOPIC)
+        CLUSTER_TOPIC = payload[constants.CLUSTER_TOPIC_NAME]
+
+        print("New cluster topic: {}".format(CLUSTER_TOPIC))
+        client.subscribe(CLUSTER_TOPIC)
+
+    else:
+        print(message_type)
+        print('Could not handle message: {} -- topic: {}'.format(message_type, msg.topic))
+
+def process_network_data(message_type, payload):
+    global NETWORK_STRING
+
     if message_type == constants.DEFAULT_NETWORK_INIT:
         print("-" * 10)
         print("Receiving network data...")
@@ -196,16 +240,6 @@ def on_message(client, userdata, msg):
                 test()
         except Exception as e:
             print(traceback.format_exc())
-
-    elif message_type == constants.SEND_CLIENT_DATA:
-        if SEND_MODEL:
-            setup_data()
-            send_model(None)
-        else:
-            send_images()
-    else:
-        print('Could not handle message')
-
 
 def on_publish(client, userdata, result):
     print("data published")

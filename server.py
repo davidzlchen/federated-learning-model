@@ -6,6 +6,8 @@ from common.aggregation_scheme import get_aggregation_scheme
 from common.datablock import Datablock
 from common.models import PersonBinaryClassifier
 from common.networkblock import Networkblock, NetworkStatus
+from common.clientblock import ClientBlock
+from common.clusterblock import ClusterBlock
 
 from utils.enums import LearningType, ClientState
 
@@ -29,7 +31,7 @@ mqtt = Mqtt(app, mqtt_logging=True)
 
 # global variables
 PACKET_SIZE = 3000
-CLIENTS = dict()
+CLIENTS = {}
 CLIENT_DATABLOCKS = {}
 CLIENT_NETWORKS = {}
 NETWORK = None
@@ -37,28 +39,47 @@ NETWORK = None
 CONFIGURATION = LearningType.CENTRALIZED
 
 pinged_once = False
-
+NUM_CLIENTS = 2
+CLUSTERS = {}
 
 @app.route('/')
 def index():
-    global CLIENT_DATABLOCKS
-    global pinged_once
+    clusters = {
+        "indoor": LearningType.CENTRALIZED,
+        "outdoor": LearningType.CENTRALIZED
+    }
 
-    if not pinged_once:
+    initialize_server(clusters, 2)
 
-        send_typed_message(
+
+    send_typed_message(
             mqtt,
-            "server/network",
+            'server/general',
             {'message': constants.SEND_CLIENT_DATA},
             MessageType.SIMPLE)
-        pinged_once = True
-        return "Sent command to receive models.\n"
-    else:
-        if CONFIGURATION == LearningType.CENTRALIZED:
-            pbc = person_classifier.train(CLIENT_DATABLOCKS)
-            encoded = encode_state_dictionary(pbc.model.state_dict())
-            send_network_model(encoded)
-            return 'Sent model to clients'
+
+
+    return "server initialized and message sent"
+
+    # global CLIENT_DATABLOCKS
+    # global pinged_once
+    #
+    # if not pinged_once:
+    #
+    #     send_typed_message(
+    #         mqtt,
+    #         "server/network",
+    #         {'message': constants.SEND_CLIENT_DATA},
+    #         MessageType.SIMPLE)
+    #     pinged_once = True
+    #     return "Sent command to receive models.\n"
+    # else:
+    #     if CONFIGURATION == LearningType.CENTRALIZED:
+    #         pbc = person_classifier.train(CLIENT_DATABLOCKS)
+    #         encoded = encode_state_dictionary(pbc.model.state_dict())
+    #         send_network_model(encoded)
+    #         return 'Sent model to clients'
+
 
 @mqtt.on_connect()
 def handle_connect(client, userdata, flags, rc):
@@ -66,10 +87,10 @@ def handle_connect(client, userdata, flags, rc):
     mqtt.subscribe(constants.NEW_CLIENT_INITIALIZATION_TOPIC)
 
 
-
-
 @mqtt.on_message()
 def handle_mqtt_message(client, userdata, msg):
+    global CLUSTERS, faults
+
     payload = json.loads(msg.payload.decode())
     dimensions = payload.get("dimensions", None)
     label = payload.get("label", None)
@@ -78,27 +99,132 @@ def handle_mqtt_message(client, userdata, msg):
 
     # Add a new client and subscribe to appropriate topic
     if msg.topic == constants.NEW_CLIENT_INITIALIZATION_TOPIC:
+
         initialize_new_clients(message)
         return
 
-
-
     client_name = msg.topic.split("/")[1]
     if client_name in CLIENTS:
-        if CLIENTS[client_name]["learning_type"] == LearningType.FEDERATED:
+        if CLIENTS[client_name].get_learning_type() == LearningType.FEDERATED:
             collect_federated_data(data, message, client_name)
-        elif CLIENTS[client_name]["learning_type"] == LearningType.CENTRALIZED:
-            collect_centralized_data(
-                data, message, client_name, dimensions, label)
-
+        elif CLIENTS[client_name].get_learning_type() == LearningType.CENTRALIZED:
+            try:
+                collect_centralized_data(
+                    data, message, client_name, dimensions, label)
+            except Exception as e:
+                print(traceback.format_exc())
 
     # check if all clients finished sending data
 
-    if all_clients_finished():
-        perform_aggregation_and_send_model()
+    finished_clusters = get_completed_clusters()
+
+    for cluster in finished_clusters:
+        learning_type = CLUSTERS[cluster].get_learning_type()
+        clients = CLUSTERS[cluster].get_clients()
+
+        if learning_type == LearningType.CENTRALIZED:
+            perform_centralized_learning(clients, cluster)
+        elif learning_type == LearningType.FEDERATED:
+            perform_federated_learning(clients, cluster)
+        elif learning_type == LearningType.HYBRID:
+            # this needs to be fixed, not sure if we're including this in final demo
+            perform_hybrid_learning()
 
 
-def perform_aggregation_and_send_model():
+def initialize_server(required_clusters, num_clients):
+    global CLUSTERS, CLIENTS
+
+    reset()
+
+    if num_clients % len(required_clusters) != 0:
+        raise ValueError("Number of clients not evenly divisible by number of required cluster.")
+
+    clients_per_cluster = num_clients / len(required_clusters)
+
+    for cluster_name in required_clusters:
+        free_clients = get_free_clients(clients_per_cluster)
+        CLUSTERS[cluster_name] = ClusterBlock(free_clients, 'cluster/'+cluster_name, required_clusters[cluster_name])
+
+        for client_id in free_clients:
+            CLIENTS[client_id].set_learning_type(required_clusters[cluster_name])
+            if required_clusters[cluster_name] == LearningType.CENTRALIZED:
+                initialize_datablocks(client_id)
+
+        # send msg to those clients saying this your cluster (for subscription)
+        for client_id in free_clients:
+            message = {
+                'message': constants.SUBSCRIBE_TO_CLUSTER,
+                constants.CLUSTER_TOPIC_NAME: CLUSTERS[cluster_name].get_mqtt_topic_name(),
+                'client_id': client_id
+            }
+
+            send_typed_message(
+                mqtt,
+                'server/general',
+                message,
+                MessageType.SIMPLE)
+
+
+# grabs [num_required] free clients and sets status of clients to STALE
+def get_free_clients(num_required):
+    global CLIENTS
+
+    free_client_ids = []
+
+    for client in CLIENTS:
+        if CLIENTS[client].get_state() == ClientState.FREE:
+            free_client_ids.append(client)
+            CLIENTS[client].set_state(ClientState.STALE)
+
+        if len(free_client_ids) == num_required:
+            return free_client_ids
+
+    raise RuntimeError('Not enough available clients')
+
+
+def reset():
+    global CLIENT_NETWORKS, CLIENT_DATABLOCKS, CLUSTERS
+
+    CLIENT_NETWORKS.clear()
+    CLIENT_DATABLOCKS.clear()
+    CLUSTERS.clear()
+
+
+# takes the clients that need to be aggregated as input and sends the model
+def perform_federated_learning(clients, cluster):
+    global CLUSTERS, CLIENTS, CLIENT_NETWORKS
+
+    averaged_state_dict = get_aggregation_scheme(clients, CLIENT_NETWORKS)
+    CLUSTERS[cluster].set_state_dict(averaged_state_dict)
+
+    for client in clients:
+        CLIENT_NETWORKS[client].reset_network_data()
+        CLIENTS[client].set_state(ClientState.STALE)
+
+    send_network_model(encode_state_dictionary(averaged_state_dict), CLUSTERS[cluster].get_mqtt_topic_name())
+
+
+def perform_centralized_learning(clients, cluster):
+    global CLIENTS, CLIENT_DATABLOCKS, CLUSTERS
+
+    applicable_client_datablocks = {k: v for (k, v) in CLIENT_DATABLOCKS.items() if k in clients}
+
+    runner = person_classifier.get_model_runner(client_data=applicable_client_datablocks, num_epochs=1)
+
+    if CLUSTERS[cluster].get_state_dict() is not None:
+        runner.model.load_state_dictionary(CLUSTERS[cluster].get_state_dict())
+
+    runner.train_model()
+
+    CLUSTERS[cluster].set_state_dict(runner.model.get_state_dictionary())
+
+    for client_id in clients:
+        CLIENTS[client_id].set_state(ClientState.STALE)
+
+    send_network_model(encode_state_dictionary(runner.model.get_state_dictionary()), CLUSTERS[cluster].get_mqtt_topic_name())
+
+
+def perform_hybrid_learning():
     global NETWORK, CLIENTS, CLIENT_NETWORKS
 
     # Current method averages and then trains
@@ -132,22 +258,27 @@ def perform_aggregation_and_send_model():
         else:
             encoded = encode_state_dictionary(NETWORK.get_state_dictionary())
 
-        send_network_model(encoded)
+        send_network_model(encoded) # ======== BROKEN =========
         for client in CLIENTS:
-            CLIENTS[client]["state"] = ClientState.STALE
+            CLIENTS[client].set_state(ClientState.STALE)
+
     except Exception as e:
         print(traceback.format_exc())
 
 
-def all_clients_finished():
-    for client_id in CLIENTS:
-        if CLIENTS[client_id]["state"] != ClientState.FINISHED:
-            # print("client {} is not finished".format(client_id))
-            return False
+def get_completed_clusters():
+    finished_clusters = []
 
-    print("All clients finished")
+    for cluster in CLUSTERS:
+        complete = True
+        for client_id in CLUSTERS[cluster].get_clients():
+            if CLIENTS[client_id].get_state() != ClientState.FINISHED:
+                complete = False
+                break
+        if complete:
+            finished_clusters.append(cluster)
 
-    return True
+    return finished_clusters
 
 
 def collect_federated_data(data, message, client_id):
@@ -167,14 +298,7 @@ def collect_federated_data(data, message, client_id):
         person_binary_classifier = PersonBinaryClassifier()
         person_binary_classifier.load_state_dictionary(state_dict)
 
-        CLIENTS[client_id]["state"] = ClientState.FINISHED
-
-
-def publish_new_model(network):
-    print('Publishing new model to clients..')
-    state_dict = encode_state_dictionary(network.get_state_dictionary())
-    send_network_model(state_dict)
-    print('Successfully published new models to clients.')
+        CLIENTS[client_id].set_state(ClientState.FINISHED)
 
 
 def collect_centralized_data(data, message, client_name, dimensions, label):
@@ -186,18 +310,35 @@ def collect_centralized_data(data, message, client_name, dimensions, label):
     elif message == constants.DEFAULT_IMAGE_END:
         convert_data(client_name)
     elif message == 'all_images_sent':
-        CLIENTS[client_name]["state"] = ClientState.FINISHED
+        CLIENTS[client_name].set_state(ClientState.FINISHED)
         print("you can train now")
+
 
 def initialize_new_clients(client_id):
     print("New client connected: {}".format(client_id))
-    CLIENTS[client_id] = {
-        "learning_type": LearningType.FEDERATED,
-        "state": ClientState.STALE}
 
-    if CLIENTS[client_id]["learning_type"] == LearningType.CENTRALIZED:
-        initialize_datablocks(client_id)
+    CLIENTS[client_id] = ClientBlock(ClientState.FREE)
+
+    # CLIENTS[client_id] = ClientBlock(LearningType.FEDERATED, ClientState.Stale)
+    #
+    # add_client_to_cluster(client_id)
+    #
+    # if CLIENTS[client_id].get_learning_type() == LearningType.CENTRALIZED:
+    #     initialize_datablocks(client_id)
+
     mqtt.subscribe('client/' + client_id)
+
+
+def add_client_to_cluster(client_id):
+    global CLUSTERS
+
+    for cluster in CLUSTERS.keys():
+        if len(CLUSTERS[cluster].get_clients()) < (NUM_CLIENTS / len(CLUSTERS.keys())):
+            CLUSTERS[cluster].get_clients().append(client_id)
+            return
+
+    print("ERROR: Could not find an empty cluster.")
+
 
 
 def initialize_new_image(client_name, dimensions, label):
@@ -221,10 +362,10 @@ def convert_data(client_name):
     datablock.convert_current_image_to_matrix()
 
 
-def send_network_model(payload):
+def send_network_model(payload, topic):
     send_typed_message(
         mqtt,
-        "server/network",
+        topic,
         payload,
         MessageType.NETWORK_CHUNK)
 
@@ -235,4 +376,6 @@ def initialize_datablocks(client):
 
 
 if __name__ == '__main__':
+
+
     app.run(host='localhost', port=5000)
