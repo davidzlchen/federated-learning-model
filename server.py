@@ -1,10 +1,23 @@
 import json
 import sys
+<<<<<<< HEAD
 
 from common import person_classifier
 from common.aggregation_scheme import get_aggregation_scheme
 from common.datablock import Datablock
 from common.ResultData import *
+=======
+import time
+import traceback
+
+from flask import Flask, request
+from flask_socketio import SocketIO
+from flask_mqtt import Mqtt
+from flask_cors import CORS
+from flask_socketio import SocketIO, send, emit
+
+from common.aggregation_scheme import get_aggregation_scheme
+>>>>>>> logic for personalized learning mode
 from common.configuration import *
 from utils.mqtt_helper import *
 import json
@@ -44,6 +57,12 @@ app.config['MQTT_BROKER_URL'] = 'localhost'
 app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
 app.config['MQTT_KEEPALIVE'] = 1000
+<<<<<<< HEAD
+=======
+app.config['SECRET_KEY'] = 'secret!'
+cors = CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
+>>>>>>> logic for personalized learning mode
 mqtt = Mqtt(app, mqtt_logging=True)
 
 # global variables
@@ -100,6 +119,12 @@ def index():
     #         return 'Sent model to clients'
 
 
+
+
+@socketio.on('connect')
+def connection():
+    print('websocket connect')
+    socketio.emit("FromAPI", "test")
 
 
 @mqtt.on_connect()
@@ -414,6 +439,4 @@ def initialize_datablocks(client):
 
 
 if __name__ == '__main__':
-
-
-    app.run(host='localhost', port=5000)
+    socketio.run(app, port=5000, host='0.0.0.0')
