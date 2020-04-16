@@ -85,7 +85,7 @@ def test(reconstruct=False):
         RUNNER.model.load_state_dictionary(state_dictionary)
 
 
-    RUNNER.test_model()
+    ResultData = RUNNER.test_model()
     send_typed_message(client, DEVICE_TOPIC, ResultData, MessageType.RESULT_DATA) #send results to server
 
 ########################################

@@ -1,12 +1,5 @@
 import json
 import sys
-<<<<<<< HEAD
-
-from common import person_classifier
-from common.aggregation_scheme import get_aggregation_scheme
-from common.datablock import Datablock
-from common.ResultData import *
-=======
 import time
 import traceback
 
@@ -17,39 +10,26 @@ from flask_cors import CORS
 from flask_socketio import SocketIO, send, emit
 
 from common.aggregation_scheme import get_aggregation_scheme
->>>>>>> logic for personalized learning mode
 from common.configuration import *
 from utils.mqtt_helper import *
-import json
-import sys
 
-from common import person_classifier
-from common.aggregation_scheme import get_aggregation_scheme
+
 from common.datablock import Datablock
 from common.ResultData import *
 from common.models import PersonBinaryClassifier
 from common.networkblock import Networkblock, NetworkStatus
 from common.clientblock import ClientBlock
 from common.clusterblock import ClusterBlock
+from common import person_classifier
 
 from utils.enums import LearningType, ClientState
 
 from utils.mqtt_helper import MessageType, send_typed_message
-from common.datablock import Datablock
-from common import person_classifier
-from flask_mqtt import Mqtt
-from flask import Flask
 from utils.model_helper import encode_state_dictionary
-from common.aggregation_scheme import get_aggregation_scheme
 from utils import constants
 from utils.model_helper import decode_state_dictionary, encode_state_dictionary
-from utils.mqtt_helper import MessageType, send_typed_message
 
-import traceback
 
-import json
-import sys
-import traceback
 sys.path.append('.')
 
 app = Flask(__name__)
@@ -57,12 +37,9 @@ app.config['MQTT_BROKER_URL'] = 'localhost'
 app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
 app.config['MQTT_KEEPALIVE'] = 1000
-<<<<<<< HEAD
-=======
 app.config['SECRET_KEY'] = 'secret!'
 cors = CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
->>>>>>> logic for personalized learning mode
 mqtt = Mqtt(app, mqtt_logging=True)
 
 # global variables
@@ -82,11 +59,11 @@ CLUSTERS = {}
 def index():
     clusters = {
         "indoor": LearningType.CENTRALIZED,
-        "personalized": LearningType.PERSONALIZED,
-        "outdoor": LearningType.FEDERATED
+        "outdoor": LearningType.FEDERATED,
+        # "p": LearningType.PERSONALIZED
     }
 
-    num_clients = 3
+    num_clients = 4
 
     initialize_server(clusters, num_clients)
 
