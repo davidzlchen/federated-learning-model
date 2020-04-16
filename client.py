@@ -72,6 +72,7 @@ def test(reconstruct=False):
         ResultData = RUNNER.test_model()
 
     send_typed_message(client, DEVICE_TOPIC, ResultData, MessageType.RESULT_DATA) #send results to server
+
 ########################################
 # sending stuff
 ########################################
@@ -156,6 +157,7 @@ def send_model(statedict):
     RUNNER.train_model()
     print("Successfully trained model.")
     test()
+
     print("Finished testing model.")
 
     state_dict = RUNNER.model.get_state_dictionary()

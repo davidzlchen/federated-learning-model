@@ -1,3 +1,10 @@
+import json
+import sys
+
+from common import person_classifier
+from common.aggregation_scheme import get_aggregation_scheme
+from common.datablock import Datablock
+from common.ResultData import *
 from common.configuration import *
 from utils.mqtt_helper import *
 import json
@@ -117,11 +124,12 @@ def handle_mqtt_message(client, userdata, msg):
         initialize_new_clients(message)
         return
 
-    if message == constants.RESULT_DATA_MESSAGE_SIGNAL:
-        receive_result_data(payload['data'])
-
-
     client_name = msg.topic.split("/")[1]
+    if message == constants.RESULT_DATA_MESSAGE_SIGNAL:
+        receive_result_data(client_name, payload['data'])
+
+
+
     if client_name in CLIENTS:
         if CLIENTS[client_name].get_learning_type() == LearningType.FEDERATED:
             collect_federated_data(data, message, client_name)
@@ -301,6 +309,11 @@ def perform_hybrid_learning():
     except Exception as e:
         print(traceback.format_exc())
 
+def receive_result_data(client_name, data):
+    print(data) # buried under mountain of tensor prints
+    result_data_object = as_result_data(data)
+    print("{}: Test Loss: {}".format(client_name, result_data_object.test_loss))
+    print("{}: Accuracy: {}".format(client_name, result_data_object.model_accuracy))
 
 def get_completed_clusters():
     finished_clusters = []

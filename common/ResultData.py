@@ -12,7 +12,7 @@ class ResultDataEncoder(json.JSONEncoder):
 
         return json.JSONEncoder.default(self, obj)
 
-def as_configuration(dct):
+def as_result_data(dct):
     if "__resultdata__" in dct:
         test_loss = dct["test_loss"]
         model_accuracy = dct["model_accuracy"]
