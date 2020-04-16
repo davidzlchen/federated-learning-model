@@ -136,8 +136,6 @@ def setup_data():
 def send_model(statedict):
     global DATABLOCK, DATA_INDEX, MODEL_TRAIN_SIZE, RUNNER
 
-    print(statedict)
-
     datablock_dict = {
         'pi01': DATABLOCK[DATA_INDEX:DATA_INDEX + MODEL_TRAIN_SIZE]}
 
@@ -162,7 +160,6 @@ def send_model(statedict):
 
     state_dict = RUNNER.model.get_state_dictionary()
 
-    print(state_dict)
 
     binary_state_dict = encode_state_dictionary(state_dict)
     publish_encoded_model(binary_state_dict)

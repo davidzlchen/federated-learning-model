@@ -62,11 +62,11 @@ CLUSTERS = {}
 @app.route('/')
 def index():
     clusters = {
-        #"indoor": LearningType.CENTRALIZED
+        "indoor": LearningType.CENTRALIZED,
         "outdoor": LearningType.FEDERATED
     }
 
-    num_clients = 2
+    num_clients = 4
 
     initialize_server(clusters, num_clients)
 
