@@ -17,7 +17,10 @@ class Configuration(object):
 class ConfigurationEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, Configuration):
-            return {"__configuration__": "true", "learning_type": str(obj.learning_type)}
+            return {
+                "__configuration__": "true",
+                "learning_type": str(
+                    obj.learning_type)}
         return json.JSONEncoder.default(self, obj)
 
 

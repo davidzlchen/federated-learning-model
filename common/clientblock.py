@@ -19,4 +19,3 @@ class ClientBlock(object):
 
     def set_state(self, state: ClientState):
         self.state = state
-

@@ -3,7 +3,8 @@ import torch.nn as nn
 import torchvision.models as models
 from copy import deepcopy
 import traceback
-from common.ResultData import ResultData
+from common.result_data import ResultData
+
 
 class PersonBinaryClassifier(nn.Module):
     def __init__(self):
@@ -134,4 +135,3 @@ class ModelRunner(object):
 
         res_data = ResultData(epoch_loss, epoch_acc)
         return res_data
-

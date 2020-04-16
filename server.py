@@ -1,31 +1,25 @@
 import json
 import sys
-import time
 import traceback
 
 from flask import Flask, request
 from flask_socketio import SocketIO
 from flask_mqtt import Mqtt
 from flask_cors import CORS
-from flask_socketio import SocketIO, send, emit
 
+from common import person_classifier
 from common.aggregation_scheme import get_aggregation_scheme
-from common.configuration import *
-from utils.mqtt_helper import *
-
-
-from common.datablock import Datablock
-from common.ResultData import *
-from common.models import PersonBinaryClassifier
-from common.networkblock import Networkblock, NetworkStatus
 from common.clientblock import ClientBlock
 from common.clusterblock import ClusterBlock
-from common import person_classifier
+from common.datablock import Datablock
+from common.models import PersonBinaryClassifier
+from common.networkblock import Networkblock
+from common.result_data import as_result_data
 
 from utils import constants
 from utils.enums import LearningType, ClientState
-from utils.model_helper import decode_state_dictionary, encode_state_dictionary
-from utils.mqtt_helper import *
+from utils.model_helper import encode_state_dictionary
+from utils.mqtt_helper import MessageType, send_typed_message
 
 sys.path.append('.')
 
@@ -48,24 +42,9 @@ CLIENT_NETWORKS = {}
 CLUSTERS = {}
 NETWORK = None
 
-CONFIGURATION = Configuration(LearningType.FEDERATED)
-
-pinged_once = False
-CLUSTERS = {}
 
 @app.route('/', methods=['POST'])
 def index():
-    global CLIENT_DATABLOCKS
-    global CONFIGURATION
-    global PINGED_ONCE
-
-    clusters = {
-        "indoor": LearningType.CENTRALIZED,
-        "outdoor": LearningType.FEDERATED,
-        # "p": LearningType.PERSONALIZED
-    }
-
-    num_clients = 4
     if request.method == 'POST':
         body = request.get_json()
         print(body)
@@ -85,6 +64,7 @@ def index():
             MessageType.SIMPLE)
 
         return "server initialized and message sent"
+
 
 @socketio.on('connect')
 def connection():
@@ -118,8 +98,6 @@ def handle_mqtt_message(client, userdata, msg):
     if message == constants.RESULT_DATA_MESSAGE_SIGNAL:
         receive_result_data(client_name, payload['data'])
 
-
-
     if client_name in CLIENTS:
         if CLIENTS[client_name].get_learning_type() == LearningType.FEDERATED:
             collect_federated_data(data, message, client_name)
@@ -127,8 +105,7 @@ def handle_mqtt_message(client, userdata, msg):
             collect_centralized_data(
                 data, message, client_name, dimensions, label)
     else:
-            print("Client not initialized correctly (client not in CLIENT_IDS)")
-    # check if all clients finished sending data
+        print("Client not initialized correctly (client not in CLIENT_IDS)")
 
     finished_clusters = get_completed_clusters()
 
@@ -141,7 +118,8 @@ def handle_mqtt_message(client, userdata, msg):
         elif learning_type == LearningType.FEDERATED:
             perform_federated_learning(clients, cluster)
         elif learning_type == LearningType.HYBRID:
-            # this needs to be fixed, not sure if we're including this in final demo
+            # this needs to be fixed, not sure if we're including this in final
+            # demo
             perform_hybrid_learning()
 
 
@@ -151,14 +129,18 @@ def initialize_server(required_clusters, num_clients):
     reset()
 
     if num_clients % len(required_clusters) != 0:
-        raise ValueError("Number of clients not evenly divisible by number of required cluster.")
+        raise ValueError(
+            "Number of clients not evenly divisible by number of required cluster.")
 
     clients_per_cluster = num_clients / len(required_clusters)
     print("clients per cluster: {}".format(clients_per_cluster))
 
     for cluster_name in required_clusters:
         free_clients = get_free_clients(clients_per_cluster)
-        CLUSTERS[cluster_name] = ClusterBlock(free_clients, 'cluster/'+cluster_name, required_clusters[cluster_name])
+        CLUSTERS[cluster_name] = ClusterBlock(
+            free_clients,
+            'cluster/' + cluster_name,
+            required_clusters[cluster_name])
 
         if required_clusters[cluster_name] == LearningType.CENTRALIZED:
             learning_type = 'centralized'
@@ -168,10 +150,10 @@ def initialize_server(required_clusters, num_clients):
             learning_type = 'personalized'
 
         for client_id in free_clients:
-            CLIENTS[client_id].set_learning_type(required_clusters[cluster_name])
+            CLIENTS[client_id].set_learning_type(
+                required_clusters[cluster_name])
             if required_clusters[cluster_name] == LearningType.CENTRALIZED:
                 initialize_datablocks(client_id)
-
 
         # send msg to those clients saying this your cluster (for subscription)
         for client_id in free_clients:
@@ -180,8 +162,7 @@ def initialize_server(required_clusters, num_clients):
                 'message': constants.SUBSCRIBE_TO_CLUSTER,
                 constants.CLUSTER_TOPIC_NAME: CLUSTERS[cluster_name].get_mqtt_topic_name(),
                 'learning_type': learning_type,
-                'client_id': client_id
-            }
+                'client_id': client_id}
 
             send_typed_message(
                 mqtt,
@@ -237,15 +218,19 @@ def perform_federated_learning(clients, cluster):
         CLIENT_NETWORKS[client].reset_network_data()
         CLIENTS[client].set_state(ClientState.STALE)
 
-    send_network_model(encode_state_dictionary(averaged_state_dict), CLUSTERS[cluster].get_mqtt_topic_name())
+    send_network_model(
+        encode_state_dictionary(averaged_state_dict),
+        CLUSTERS[cluster].get_mqtt_topic_name())
 
 
 def perform_centralized_learning(clients, cluster):
     global CLIENTS, CLIENT_DATABLOCKS, CLUSTERS
 
-    applicable_client_datablocks = {k: v for (k, v) in CLIENT_DATABLOCKS.items() if k in clients}
+    applicable_client_datablocks = {
+        k: v for (k, v) in CLIENT_DATABLOCKS.items() if k in clients}
 
-    runner = person_classifier.get_model_runner(client_data=applicable_client_datablocks, num_epochs=1)
+    runner = person_classifier.get_model_runner(
+        client_data=applicable_client_datablocks, num_epochs=1)
 
     if CLUSTERS[cluster].get_state_dict() is not None:
         runner.model.load_state_dictionary(CLUSTERS[cluster].get_state_dict())
@@ -257,7 +242,10 @@ def perform_centralized_learning(clients, cluster):
     for client_id in clients:
         CLIENTS[client_id].set_state(ClientState.STALE)
 
-    send_network_model(encode_state_dictionary(runner.model.get_state_dictionary()), CLUSTERS[cluster].get_mqtt_topic_name())
+    send_network_model(
+        encode_state_dictionary(
+            runner.model.get_state_dictionary()),
+        CLUSTERS[cluster].get_mqtt_topic_name())
 
 
 def perform_hybrid_learning():
@@ -286,15 +274,18 @@ def perform_hybrid_learning():
                 CLIENT_NETWORKS[client].reset_network_data()
 
         if len(CLIENT_DATABLOCKS) != 0:
-            runner = person_classifier.get_model_runner(client_data=CLIENT_DATABLOCKS, num_epochs=1)
+            runner = person_classifier.get_model_runner(
+                client_data=CLIENT_DATABLOCKS, num_epochs=1)
             if averaged_state_dict is not None:
-                runner.model.load_state_dictionary(NETWORK.get_state_dictionary())
+                runner.model.load_state_dictionary(
+                    NETWORK.get_state_dictionary())
             runner.train_model()
-            encoded = encode_state_dictionary(runner.model.get_state_dictionary())
+            encoded = encode_state_dictionary(
+                runner.model.get_state_dictionary())
         else:
             encoded = encode_state_dictionary(NETWORK.get_state_dictionary())
 
-        send_network_model(encoded) # ======== BROKEN =========
+        # send_network_model(encoded) # ======== BROKEN =========
         for client in CLIENTS:
             CLIENTS[client].set_state(ClientState.STALE)
 
@@ -303,10 +294,17 @@ def perform_hybrid_learning():
 
 
 def receive_result_data(client_name, data):
-    print(data) # buried under mountain of tensor prints
+    print(data)  # buried under mountain of tensor prints
     result_data_object = as_result_data(data)
-    print("{}: Test Loss: {}".format(client_name, result_data_object.test_loss))
-    print("{}: Accuracy: {}".format(client_name, result_data_object.model_accuracy))
+    print(
+        "{}: Test Loss: {}".format(
+            client_name,
+            result_data_object.test_loss))
+    print(
+        "{}: Accuracy: {}".format(
+            client_name,
+            result_data_object.model_accuracy))
+
 
 def get_completed_clusters():
     finished_clusters = []
@@ -355,23 +353,10 @@ def collect_centralized_data(data, message, client_name, dimensions, label):
         CLIENTS[client_name].set_state(ClientState.FINISHED)
         print("All images received from client: {}".format(client_name))
 
-    if NUM_DEVICES_SENT_IMAGE == num_devices:
-        pbc = person_classifier.train(CLIENT_DATABLOCKS)
-        encoded = encode_state_dictionary(pbc.model.state_dict())
-        send_network_model(encoded)
 
 def initialize_new_clients(client_id):
     print("New client connected: {}".format(client_id))
-
     CLIENTS[client_id] = ClientBlock(ClientState.FREE)
-
-    # CLIENTS[client_id] = ClientBlock(LearningType.FEDERATED, ClientState.Stale)
-    #
-    # add_client_to_cluster(client_id)
-    #
-    # if CLIENTS[client_id].get_learning_type() == LearningType.CENTRALIZED:
-    #     initialize_datablocks(client_id)
-
     mqtt.subscribe('client/' + client_id)
 
 

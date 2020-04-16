@@ -31,7 +31,8 @@ def get_average(clients, client_networks):
         #         return None
 
         client_id = next(clients_iterator)
-        averaged_state_dict = copy.deepcopy(client_networks[client_id].state_dict)
+        averaged_state_dict = copy.deepcopy(
+            client_networks[client_id].state_dict)
 
         temp_model = PersonBinaryClassifier()
         temp_model.load_state_dictionary(averaged_state_dict)
@@ -49,7 +50,8 @@ def get_average(clients, client_networks):
                 model_params = client_model.model.named_parameters()
                 for param_name, param_value in model_params:
                     if param_name in averaged_state_dict:
-                        averaged_state_dict[param_name].add_(client_state_dict[param_name])
+                        averaged_state_dict[param_name].add_(
+                            client_state_dict[param_name])
 
                 num_federated_clients += 1
             except StopIteration:
@@ -59,7 +61,8 @@ def get_average(clients, client_networks):
         averaged_model.load_state_dictionary(averaged_state_dict)
 
         for param_name, param_value in averaged_model.model.named_parameters():
-            averaged_state_dict[param_name] = torch.div(averaged_state_dict[param_name], num_federated_clients)
+            averaged_state_dict[param_name] = torch.div(
+                averaged_state_dict[param_name], num_federated_clients)
     except Exception as e:
-       print(traceback.format_exc())
+        print(traceback.format_exc())
     return averaged_state_dict

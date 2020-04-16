@@ -1,11 +1,8 @@
 import React, { Component } from "react";
+import socketIOClient from "socket.io-client";
 import "./Run.css";
 
-import { BrowserRouter as Router, Route, useParams } from "react-router-dom";
-import socketIOClient from "socket.io-client";
-
 type RunProps = {};
-
 type RunState = {
   response: Object;
   endpoint: string;
