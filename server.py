@@ -70,13 +70,20 @@ def index():
         body = request.get_json()
         print(body)
 
-        operation_mode = LearningType(body['operationMode'])
+        num_clients = body.get('numDevices', 1)
+        operation_mode = LearningType(body.get('operationMode', 1))
+        clusters = {
+            "indoor": operation_mode,
+            "outdoor": operation_mode
+        }
         initialize_server(clusters, num_clients)
+
         send_typed_message(
             mqtt,
             'server/general',
             constants.START_LEARNING_MESSAGE,
             MessageType.SIMPLE)
+
         return "server initialized and message sent"
 
 @socketio.on('connect')

@@ -23,7 +23,7 @@ class Run extends Component<RunProps, RunState> {
   componentDidMount() {
     const { endpoint } = this.state;
     const socket = socketIOClient(endpoint);
-    socket.on("FromAPI", (data: Object) => this.setState({ response: data }));
+    socket.on("FromAPI", (data: string) => this.setState({ response: data }));
   }
 
   render() {
