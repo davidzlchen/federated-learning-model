@@ -2,11 +2,10 @@ from enum import Enum
 
 
 class LearningType(Enum):
-    NONE = 0
-    CENTRALIZED = 1
-    FEDERATED = 2
-    HYBRID = 3
-    PERSONALIZED = 4
+    NONE = -1
+    CENTRALIZED = 0
+    FEDERATED = 1
+    HYBRID = 2
 
 
 class ClientState(Enum):
