@@ -1,5 +1,6 @@
 import pickle
 import time
+import json
 import numpy as np
 import uuid
 
@@ -21,6 +22,7 @@ DATA_INDEX = 0
 MODEL_TRAIN_SIZE = 24
 RUNNER = None
 CONFIGURATION = Configuration()
+TOTAL_DATA_COUNT = 240
 
 PI_ID = 'pi{}'.format(uuid.uuid4())
 DEVICE_TOPIC = 'client/{}'.format(PI_ID)
@@ -29,9 +31,42 @@ CLUSTER_TOPIC = None
 
 
 ########################################
-# model stuff
+# personalized model
 ########################################
 
+def personalized():
+    global MODEL_TRAIN_SIZE
+    setup_data()
+    MODEL_TRAIN_SIZE = 240
+    train(None)
+    test()
+    print("Finished testing model.")
+
+########################################
+# model stuff
+########################################
+def train(statedict):
+    global DATABLOCK, DATA_INDEX, MODEL_TRAIN_SIZE, RUNNER
+    # print("State dict before training: ")
+    # print(statedict)
+    datablock_dict = {
+        'pi01': DATABLOCK[DATA_INDEX:DATA_INDEX + MODEL_TRAIN_SIZE]}
+
+    RUNNER = person_classifier.get_model_runner(datablock_dict)
+
+    if DATA_INDEX != 0:
+        RUNNER.model.load_state_dictionary(statedict)
+
+    print(
+        "Training on images {} to {}".format(
+            DATA_INDEX,
+            DATA_INDEX +
+            MODEL_TRAIN_SIZE -
+            1))
+    DATA_INDEX += MODEL_TRAIN_SIZE
+
+    RUNNER.train_model()
+    print("Successfully trained model.")
 
 def reconstruct_model():
     global NETWORK_STRING
@@ -41,36 +76,16 @@ def reconstruct_model():
 
 
 def test(reconstruct=False):
-    if CONFIGURATION.learning_type == LearningType.CENTRALIZED:
-        person_test_samples = pickle.load(
-            open('./data/personimagesTest.pkl', 'rb'))
-        person_test_images = [sample[0] for sample in person_test_samples]
-        no_person_test_samples = pickle.load(
-            open('./data/nopersonimagesTest.pkl', 'rb'))
-        no_person_test_images = [sample[0] for sample in no_person_test_samples]
-        images = np.concatenate((person_test_images, no_person_test_images))
-        num_test_samples = len(person_test_images)
-        labels = np.concatenate((
-            np.ones(num_test_samples, dtype=np.int_),
-            np.zeros(num_test_samples, dtype=np.int_)
-        ))
-        datablocks = {'1': Datablock(images=images, labels=labels)}
-        runner = person_classifier.get_model_runner(datablocks)
+    global RUNNER
+
+    if not RUNNER:
+        RUNNER = person_classifier.get_model_runner()
+    if reconstruct:
         state_dictionary = reconstruct_model()
-        runner.model.load_state_dictionary(state_dictionary)
-        ResultData = runner.test_model()
+        RUNNER.model.load_state_dictionary(state_dictionary)
 
-    else:
-        global RUNNER
 
-        if not RUNNER:
-            RUNNER = person_classifier.get_model_runner(None)
-        if reconstruct:
-            state_dictionary = reconstruct_model()
-            RUNNER.model.load_state_dictionary(state_dictionary)
-
-        ResultData = RUNNER.test_model()
-
+    ResultData = RUNNER.test_model()
     send_typed_message(client, DEVICE_TOPIC, ResultData, MessageType.RESULT_DATA) #send results to server
 
 ########################################
@@ -134,26 +149,7 @@ def setup_data():
 
 
 def send_model(statedict):
-    global DATABLOCK, DATA_INDEX, MODEL_TRAIN_SIZE, RUNNER
-
-    datablock_dict = {
-        'pi01': DATABLOCK[DATA_INDEX:DATA_INDEX + MODEL_TRAIN_SIZE]}
-
-    RUNNER = person_classifier.get_model_runner(datablock_dict)
-
-    if DATA_INDEX != 0:
-        RUNNER.model.load_state_dictionary(statedict)
-
-    print(
-        "Training on images {} to {}".format(
-            DATA_INDEX,
-            DATA_INDEX +
-            MODEL_TRAIN_SIZE -
-            1))
-    DATA_INDEX += MODEL_TRAIN_SIZE
-
-    RUNNER.train_model()
-    print("Successfully trained model.")
+    train(statedict)
     test()
 
     print("Finished testing model.")
@@ -216,6 +212,8 @@ def on_message(client, userdata, msg):
             send_model(None)
         elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
             send_images()
+        elif CONFIGURATION.learning_type == LearningType.PERSONALIZED:
+            personalized()
 
     elif message_type == constants.SUBSCRIBE_TO_CLUSTER:
         # remove current cluster topic and subscribe to new cluster topic
@@ -225,8 +223,10 @@ def on_message(client, userdata, msg):
 
         if payload['learning_type'] == 'federated':
             CONFIGURATION.learning_type = LearningType.FEDERATED
-        else:
+        elif payload['learning_type'] == 'centralized':
             CONFIGURATION.learning_type = LearningType.CENTRALIZED
+        else:
+            CONFIGURATION.learning_type = LearningType.PERSONALIZED
 
         if CLUSTER_TOPIC is not None:
             client.unsubscribe(CLUSTER_TOPIC)
@@ -252,15 +252,15 @@ def process_network_data(message_type, payload):
     elif message_type == constants.DEFAULT_NETWORK_CHUNK:
         NETWORK_STRING += payload["data"]
     elif message_type == constants.DEFAULT_NETWORK_END:
-        try:
-            print("Finished receiving network data, loading state dictionary")
-            state_dict = decode_state_dictionary(NETWORK_STRING)
-            if CONFIGURATION.learning_type == LearningType.FEDERATED:
-                send_model(state_dict)
-            else:
-                test()
-        except Exception as e:
-            print(traceback.format_exc())
+        print("Finished receiving network data, loading state dictionary")
+        state_dict = decode_state_dictionary(NETWORK_STRING)
+        if CONFIGURATION.learning_type == LearningType.FEDERATED:
+            if DATA_INDEX + MODEL_TRAIN_SIZE > TOTAL_DATA_COUNT:
+                print("Done!")
+                exit()
+            send_model(state_dict)
+        else:
+            test(True)
 
 def reset_client():
     global CONFIGURATION, CLUSTER_TOPIC, NETWORK_STRING, DATABLOCK, DATA_INDEX, RUNNER
@@ -282,6 +282,7 @@ def on_publish(client, userdata, result):
 client = mqtt.Client(client_id=PI_ID)
 client.on_connect = on_connect
 client.on_message = on_message
+client.on_log = on_log
 client.connect("localhost", 1883, 65534)
 
 # Blocking call that processes network traffic, dispatches callbacks and
