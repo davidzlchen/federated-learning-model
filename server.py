@@ -49,10 +49,12 @@ CLUSTERS = {}
 def index():
     clusters = {
         "indoor": LearningType.CENTRALIZED,
-        "outdoor": LearningType.CENTRALIZED
+        "outdoor": LearningType.FEDERATED
     }
 
-    initialize_server(clusters, 4)
+    num_clients = 4
+
+    initialize_server(clusters, num_clients)
 
 
     send_typed_message(
@@ -180,8 +182,6 @@ def initialize_server(required_clusters, num_clients):
 # grabs [num_required] free clients and sets status of clients to STALE
 def get_free_clients(num_required):
     global CLIENTS
-
-    print(CLIENTS)
 
     free_client_ids = []
 
@@ -336,7 +336,7 @@ def collect_centralized_data(data, message, client_name, dimensions, label):
         convert_data(client_name)
     elif message == 'all_images_sent':
         CLIENTS[client_name].set_state(ClientState.FINISHED)
-        print("you can train now")
+        print("All images received from client: {}".format(client_name))
 
 
 def initialize_new_clients(client_id):
