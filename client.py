@@ -7,7 +7,7 @@ import uuid
 import paho.mqtt.client as mqtt
 from common import person_classifier
 from common.datablock import Datablock
-from common.ResultData import *
+from common.result_data import *
 import utils.constants as constants
 from utils.mqtt_helper import send_typed_message, MessageType, divide_chunks
 from utils.model_helper import decode_state_dictionary, encode_state_dictionary
@@ -45,6 +45,8 @@ def personalized():
 ########################################
 # model stuff
 ########################################
+
+
 def train(statedict):
     global DATABLOCK, DATA_INDEX, MODEL_TRAIN_SIZE, RUNNER
     # print("State dict before training: ")
@@ -68,6 +70,7 @@ def train(statedict):
     RUNNER.train_model()
     print("Successfully trained model.")
 
+
 def reconstruct_model():
     global NETWORK_STRING
 
@@ -84,9 +87,12 @@ def test(reconstruct=False):
         state_dictionary = reconstruct_model()
         RUNNER.model.load_state_dictionary(state_dictionary)
 
-
     ResultData = RUNNER.test_model()
-    send_typed_message(client, DEVICE_TOPIC, ResultData, MessageType.RESULT_DATA) #send results to server
+    send_typed_message(
+        client,
+        DEVICE_TOPIC,
+        ResultData,
+        MessageType.RESULT_DATA)  # send results to server
 
 ########################################
 # sending stuff
@@ -132,7 +138,11 @@ def send_images():
     end_msg = {
         'message': 'all_images_sent'
     }
-    send_typed_message(client, DEVICE_TOPIC, json.dumps(end_msg), MessageType.SIMPLE)
+    send_typed_message(
+        client,
+        DEVICE_TOPIC,
+        json.dumps(end_msg),
+        MessageType.SIMPLE)
 
 
 def setup_data():
@@ -155,7 +165,6 @@ def send_model(statedict):
     print("Finished testing model.")
 
     state_dict = RUNNER.model.get_state_dictionary()
-
 
     binary_state_dict = encode_state_dictionary(state_dict)
     publish_encoded_model(binary_state_dict)
@@ -192,7 +201,7 @@ def on_connect(client, userdata, flags, rc):
 def on_log(client, userdata, level, buf):
     if level != mqtt.MQTT_LOG_DEBUG:
         print(traceback.format_exc())
-        print("log: ",buf)
+        print("log: ", buf)
         print("level", level)
         exit()
 
@@ -242,6 +251,7 @@ def on_message(client, userdata, msg):
         print(message_type)
         print('Could not handle message: {} -- topic: {}'.format(message_type, msg.topic))
 
+
 def process_network_data(message_type, payload):
     global NETWORK_STRING
 
@@ -261,6 +271,7 @@ def process_network_data(message_type, payload):
             send_model(state_dict)
         else:
             test(True)
+
 
 def reset_client():
     global CONFIGURATION, CLUSTER_TOPIC, NETWORK_STRING, DATABLOCK, DATA_INDEX, RUNNER

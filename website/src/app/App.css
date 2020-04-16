@@ -1,0 +1,13 @@
+@import '~antd/dist/antd.css';
+
+.site-layout .site-layout-background {
+  background: #fff;
+}
+
+.App {
+  height: 100%;
+}
+
+#parent-container {
+  height: 100%;
+}
