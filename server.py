@@ -43,6 +43,7 @@ app = Flask(__name__)
 app.config['MQTT_BROKER_URL'] = 'localhost'
 app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
+app.config['MQTT_KEEPALIVE'] = 1000
 mqtt = Mqtt(app, mqtt_logging=True)
 
 # global variables
@@ -61,11 +62,11 @@ CLUSTERS = {}
 @app.route('/')
 def index():
     clusters = {
-        "indoor": LearningType.CENTRALIZED
-        #"outdoor": LearningType.FEDERATED
+        #"indoor": LearningType.CENTRALIZED
+        "outdoor": LearningType.FEDERATED
     }
 
-    num_clients = 1
+    num_clients = 2
 
     initialize_server(clusters, num_clients)
 
@@ -308,6 +309,7 @@ def perform_hybrid_learning():
     except Exception as e:
         print(traceback.format_exc())
 
+
 def receive_result_data(client_name, data):
     print(data) # buried under mountain of tensor prints
     result_data_object = as_result_data(data)
@@ -328,12 +330,6 @@ def get_completed_clusters():
 
     return finished_clusters
 
-
-def receive_result_data(data):
-    print(data)
-    result_data_object = as_configuration(data)
-    print("Test Loss: "+result_data_object.test_loss)
-    print("Accuracy: "+result_data_object.model_accuracy)
 
 def collect_federated_data(data, message, client_id):
     global CLIENT_NETWORKS, CLIENTS
