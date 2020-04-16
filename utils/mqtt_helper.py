@@ -48,6 +48,8 @@ def send_network_chunk_message(client, topic, network_data):
         client.publish(topic, json.dumps(network_message_chunk))
     client.publish(topic, json.dumps(constants.DEFAULT_NETWORK_END_MESSAGE))
 
+    print("published network to clients")
+
 
 def send_image_chunk_message(client, topic, sample):
     image, label = sample

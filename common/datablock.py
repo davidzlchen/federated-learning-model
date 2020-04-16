@@ -58,3 +58,10 @@ class Datablock(object):
         random.shuffle(zipped)
 
         self.image_data, self.dimensions, self.labels = zip(*zipped)
+
+    def reset(self):
+        self.num_images = 0
+        self.current_image = -1
+        self.image_data = []
+        self.dimensions = []
+        self.labels = []

@@ -24,6 +24,8 @@ CONFIGURATION = Configuration()
 PI_ID = 'pi{}'.format(uuid.uuid4())
 DEVICE_TOPIC = 'client/{}'.format(PI_ID)
 
+CLUSTER_TOPIC = None
+
 
 ########################################
 # model stuff
@@ -90,13 +92,22 @@ def send_images():
     no_persons_data = pickle.load(open('./data/nopersonimages.pkl', 'rb'))
 
     batch_size = DEFAULT_BATCH_SIZE
+    counter = 0
     for label, images in enumerate([no_persons_data, persons_data]):
-        for chunk in divide_chunks(images, batch_size):
-            for sample in chunk:
-                image, _ = sample
-                publish_encoded_image(image, label)
-            print('Sleep after sending batch of {}'.format(batch_size))
-            time.sleep(1)
+
+        # for chunk in divide_chunks(images, batch_size):
+        #     for sample in chunk:
+        #         image, _ = sample
+        #         publish_encoded_image(image, label)
+        #     print('Sleep after sending batch of {}'.format(batch_size))
+        #     time.sleep(1)
+
+        for image, attributes in images:
+            publish_encoded_image(image, label)
+            counter += 1
+            if counter % 15 == 0:
+                time.sleep(1)
+                print('{} images sent, sleeping for 1 second.'.format(batch_size))
     print('sent all images!')
 
     end_msg = {
@@ -120,8 +131,9 @@ def setup_data():
 
 def send_model(statedict):
     global DATABLOCK, DATA_INDEX, MODEL_TRAIN_SIZE, RUNNER
-    print("State dict before training: ")
+
     print(statedict)
+
     datablock_dict = {
         'pi01': DATABLOCK[DATA_INDEX:DATA_INDEX + MODEL_TRAIN_SIZE]}
 
@@ -144,6 +156,9 @@ def send_model(statedict):
     print("Finished testing model.")
 
     state_dict = RUNNER.model.get_state_dictionary()
+
+    print(state_dict)
+
     binary_state_dict = encode_state_dictionary(state_dict)
     publish_encoded_model(binary_state_dict)
 
@@ -168,7 +183,9 @@ def send_client_id():
 
 def on_connect(client, userdata, flags, rc):
     send_client_id()
-    client.subscribe("server/network")
+
+    client.subscribe("server/general")
+    # client.subscribe("server/network")
     print("Connected with result code " + str(rc))
 
 # The callback for when a PUBLISH message is received from the server.
@@ -183,13 +200,49 @@ def on_log(client, userdata, level, buf):
 
 
 def on_message(client, userdata, msg):
-    global NETWORK_STRING
-    global CONFIGURATION
-
-    client.on_log = on_log
+    global CLUSTER_TOPIC
 
     payload = json.loads(msg.payload.decode())
     message_type = payload["message"]
+
+    if msg.topic == CLUSTER_TOPIC:
+        process_network_data(message_type, payload)
+
+    elif message_type == constants.START_LEARNING:
+        if CONFIGURATION.learning_type == LearningType.FEDERATED:
+            setup_data()
+            send_model(None)
+        elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
+            send_images()
+
+    elif message_type == constants.SUBSCRIBE_TO_CLUSTER:
+        # remove current cluster topic and subscribe to new cluster topic
+
+        if payload['client_id'] != PI_ID:
+            return
+
+        if payload['learning_type'] == 'federated':
+            CONFIGURATION.learning_type = LearningType.FEDERATED
+        else:
+            CONFIGURATION.learning_type = LearningType.CENTRALIZED
+
+        if CLUSTER_TOPIC is not None:
+            client.unsubscribe(CLUSTER_TOPIC)
+        CLUSTER_TOPIC = payload[constants.CLUSTER_TOPIC_NAME]
+
+        print("New cluster topic: {}".format(CLUSTER_TOPIC))
+        client.subscribe(CLUSTER_TOPIC)
+
+    elif message_type == constants.RESET_CLIENT:
+        reset_client()
+
+    else:
+        print(message_type)
+        print('Could not handle message: {} -- topic: {}'.format(message_type, msg.topic))
+
+def process_network_data(message_type, payload):
+    global NETWORK_STRING
+
     if message_type == constants.DEFAULT_NETWORK_INIT:
         print("-" * 10)
         print("Receiving network data...")
@@ -206,17 +259,18 @@ def on_message(client, userdata, msg):
                 test()
         except Exception as e:
             print(traceback.format_exc())
-    elif message_type == constants.SEND_CLIENT_DATA:
-        if CONFIGURATION.learning_type == LearningType.FEDERATED:
-            setup_data()
-            send_model(None)
-        elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
-            send_images()
-    elif message_type == constants.CONFIGURATION_MESSAGE_SIGNAL:
-        configuration_object = as_configuration(payload['data'])
-        CONFIGURATION = configuration_object
-    else:
-        print('Could not handle message: ', message_type)
+
+def reset_client():
+    global CONFIGURATION, CLUSTER_TOPIC, NETWORK_STRING, DATABLOCK, DATA_INDEX, RUNNER
+
+    CONFIGURATION.learning_type = LearningType.NONE
+    CLUSTER_TOPIC = None
+    NETWORK_STRING = ''
+
+    DATABLOCK = Datablock()
+    DATA_INDEX = 0
+
+    RUNNER = None
 
 
 def on_publish(client, userdata, result):
