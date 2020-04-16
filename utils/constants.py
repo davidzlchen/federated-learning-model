@@ -46,6 +46,16 @@ START_LEARNING_MESSAGE = {
 
 SUBSCRIBE_TO_CLUSTER = 'subscribe_to_cluster'
 
+RESULT_DATA_MESSAGE_SIGNAL = 'result_data'
+RESULT_DATA_MESSAGE = {
+    'message': RESULT_DATA_MESSAGE_SIGNAL
+}
+
+CONFIGURATION_MESSAGE_SIGNAL = 'configure_device'
+CONFIGURATION_MESSAGE = {
+    'message': CONFIGURATION_MESSAGE_SIGNAL
+}
+
 '''
 Section for Topics
 '''

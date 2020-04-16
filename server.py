@@ -1,5 +1,19 @@
+import json
+import sys
+
+from common import person_classifier
+from common.aggregation_scheme import get_aggregation_scheme
+from common.datablock import Datablock
+from common.ResultData import *
 from common.configuration import *
 from utils.mqtt_helper import *
+import json
+import sys
+
+from common import person_classifier
+from common.aggregation_scheme import get_aggregation_scheme
+from common.datablock import Datablock
+from common.ResultData import *
 from common.models import PersonBinaryClassifier
 from common.networkblock import Networkblock, NetworkStatus
 from common.clientblock import ClientBlock
@@ -29,6 +43,7 @@ app = Flask(__name__)
 app.config['MQTT_BROKER_URL'] = 'localhost'
 app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
+app.config['MQTT_KEEPALIVE'] = 1000
 mqtt = Mqtt(app, mqtt_logging=True)
 
 # global variables
@@ -41,7 +56,6 @@ NETWORK = None
 CONFIGURATION = Configuration(LearningType.FEDERATED)
 
 pinged_once = False
-NUM_CLIENTS = 2
 CLUSTERS = {}
 
 # TODO: set global CONFIGURATION with GUI data, not programmer setting
@@ -111,6 +125,11 @@ def handle_mqtt_message(client, userdata, msg):
         return
 
     client_name = msg.topic.split("/")[1]
+    if message == constants.RESULT_DATA_MESSAGE_SIGNAL:
+        receive_result_data(client_name, payload['data'])
+
+
+
     if client_name in CLIENTS:
         if CLIENTS[client_name].get_learning_type() == LearningType.FEDERATED:
             collect_federated_data(data, message, client_name)
@@ -291,6 +310,12 @@ def perform_hybrid_learning():
         print(traceback.format_exc())
 
 
+def receive_result_data(client_name, data):
+    print(data) # buried under mountain of tensor prints
+    result_data_object = as_result_data(data)
+    print("{}: Test Loss: {}".format(client_name, result_data_object.test_loss))
+    print("{}: Accuracy: {}".format(client_name, result_data_object.model_accuracy))
+
 def get_completed_clusters():
     finished_clusters = []
 
@@ -352,18 +377,6 @@ def initialize_new_clients(client_id):
     #     initialize_datablocks(client_id)
 
     mqtt.subscribe('client/' + client_id)
-
-
-def add_client_to_cluster(client_id):
-    global CLUSTERS
-
-    for cluster in CLUSTERS.keys():
-        if len(CLUSTERS[cluster].get_clients()) < (NUM_CLIENTS / len(CLUSTERS.keys())):
-            CLUSTERS[cluster].get_clients().append(client_id)
-            return
-
-    print("ERROR: Could not find an empty cluster.")
-
 
 
 def initialize_new_image(client_name, dimensions, label):

@@ -5,6 +5,7 @@ import pickle
 from common.configuration import ConfigurationEncoder
 from utils import constants
 from enum import Enum
+from common.ResultData import ResultDataEncoder
 
 DEFAULT_PACKET_SIZE = 3000
 
@@ -14,6 +15,7 @@ class MessageType(Enum):
     IMAGE_CHUNK = 2
     SIMPLE = 3  # use when short enough to not need chunks
     CONFIGURATION = 4
+    RESULT_DATA = 5
 
 
 def is_json(myjson):
@@ -28,7 +30,6 @@ def divide_chunks(array, size=DEFAULT_PACKET_SIZE):
     len_array = len(array)
     for idx in range(0, len_array, size):
         yield array[idx:idx + size]
-
 
 def send_message(client, topic, message, encoder=None):
     if not is_json(message):
@@ -66,6 +67,10 @@ def send_image_chunk_message(client, topic, sample):
         client.publish(topic, json.dumps(image_message_chunk))
     client.publish(topic, json.dumps(constants.DEFAULT_IMAGE_END_MESSAGE))
 
+def send_result_data_message(client, topic, result_data_instance):
+    message = constants.RESULT_DATA_MESSAGE
+    message['data'] = result_data_instance
+    send_message(client, topic, message, encoder=ResultDataEncoder)
 
 def send_configuration_message(client, topic, configuration_instance):
     #serialized_configuration = pickle.dumps(configuration_instance)
@@ -83,5 +88,7 @@ def send_typed_message(client, topic, message, message_type):
         send_configuration_message(client, topic, message)
     elif message_type is MessageType.SIMPLE:
         send_message(client, topic, message)
+    elif message_type is MessageType.RESULT_DATA:
+        send_result_data_message(client, topic, message)
     else:
         print('{} not handled'.format(message_type))
