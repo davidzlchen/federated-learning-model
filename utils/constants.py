@@ -29,17 +29,27 @@ DEFAULT_IMAGE_END_MESSAGE = {
 }
 
 SEND_CLIENT_DATA = 'begin_sending_data'
-SEND_CLIENT_DATA = {
+SEND_CLIENT_DATA_MESSAGE = {
     'message': SEND_CLIENT_DATA
 }
 
-CONFIGURATION_MESSAGE_SIGNAL = 'configure_device'
-CONFIGURATION_MESSAGE = {
-    'message': CONFIGURATION_MESSAGE_SIGNAL
+RESET_CLIENT = 'reset_client'
+RESET_CLIENT_MESSAGE = {
+    'message': RESET_CLIENT
 }
+
+START_LEARNING = 'start_learning'
+START_LEARNING_MESSAGE = {
+    'message': START_LEARNING
+}
+
+
+SUBSCRIBE_TO_CLUSTER = 'subscribe_to_cluster'
 
 '''
 Section for Topics
 '''
 
 NEW_CLIENT_INITIALIZATION_TOPIC = 'client_ids'
+
+CLUSTER_TOPIC_NAME = 'cluster_topic_name'
