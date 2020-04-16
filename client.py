@@ -6,6 +6,7 @@ import uuid
 import paho.mqtt.client as mqtt
 from common import person_classifier
 from common.datablock import Datablock
+from common.ResultData import *
 import utils.constants as constants
 from utils.mqtt_helper import send_typed_message, MessageType, divide_chunks
 from utils.model_helper import decode_state_dictionary, encode_state_dictionary
@@ -57,7 +58,8 @@ def test(reconstruct=False):
         runner = person_classifier.get_model_runner(datablocks)
         state_dictionary = reconstruct_model()
         runner.model.load_state_dictionary(state_dictionary)
-        runner.test_model()
+        ResultData = runner.test_model()
+
     else:
         global RUNNER
 
@@ -67,7 +69,9 @@ def test(reconstruct=False):
             state_dictionary = reconstruct_model()
             RUNNER.model.load_state_dictionary(state_dictionary)
 
-        RUNNER.test_model()
+        ResultData = RUNNER.test_model()
+
+    send_typed_message(client, DEVICE_TOPIC, ResultData, MessageType.RESULT_DATA) #send results to server
 
 ########################################
 # sending stuff
@@ -132,8 +136,6 @@ def setup_data():
 def send_model(statedict):
     global DATABLOCK, DATA_INDEX, MODEL_TRAIN_SIZE, RUNNER
 
-    print(statedict)
-
     datablock_dict = {
         'pi01': DATABLOCK[DATA_INDEX:DATA_INDEX + MODEL_TRAIN_SIZE]}
 
@@ -153,11 +155,11 @@ def send_model(statedict):
     RUNNER.train_model()
     print("Successfully trained model.")
     test()
+
     print("Finished testing model.")
 
     state_dict = RUNNER.model.get_state_dictionary()
 
-    print(state_dict)
 
     binary_state_dict = encode_state_dictionary(state_dict)
     publish_encoded_model(binary_state_dict)
