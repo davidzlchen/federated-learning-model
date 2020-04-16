@@ -1,3 +1,15 @@
+import json
+import sys
+import time
+import traceback
+
+from flask import Flask, request
+from flask_socketio import SocketIO
+from flask_mqtt import Mqtt
+from flask_cors import CORS
+from flask_socketio import SocketIO, send, emit
+
+from common.aggregation_scheme import get_aggregation_scheme
 from common.configuration import *
 from utils.mqtt_helper import *
 from common.models import PersonBinaryClassifier
@@ -29,6 +41,10 @@ app = Flask(__name__)
 app.config['MQTT_BROKER_URL'] = 'localhost'
 app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
+app.config['MQTT_KEEPALIVE'] = 1000
+app.config['SECRET_KEY'] = 'secret!'
+cors = CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 mqtt = Mqtt(app, mqtt_logging=True)
 
 # global variables
@@ -86,6 +102,12 @@ def index():
     #         return 'Sent model to clients'
 
 
+
+
+@socketio.on('connect')
+def connection():
+    print('websocket connect')
+    socketio.emit("FromAPI", "test")
 
 
 @mqtt.on_connect()
@@ -401,6 +423,4 @@ def initialize_datablocks(client):
 
 
 if __name__ == '__main__':
-
-
-    app.run(host='localhost', port=5000)
+    socketio.run(app, port=5000, host='0.0.0.0')

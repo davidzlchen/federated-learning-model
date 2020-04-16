@@ -4,5 +4,6 @@ torchvision
 matplotlib
 paho-mqtt
 flask-mqtt
+flask-socketio
 pylint
 autopep8
