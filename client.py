@@ -223,9 +223,10 @@ def on_message(client, userdata, msg):
 
         if payload['learning_type'] == 'federated':
             CONFIGURATION.learning_type = LearningType.FEDERATED
-        #TODO: probably need to add personalized as an option here.
-        else:
+        elif payload['learning_type'] == 'centralized':
             CONFIGURATION.learning_type = LearningType.CENTRALIZED
+        else:
+            CONFIGURATION.learning_type = LearningType.PERSONALIZED
 
         if CLUSTER_TOPIC is not None:
             client.unsubscribe(CLUSTER_TOPIC)

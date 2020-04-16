@@ -82,10 +82,11 @@ CLUSTERS = {}
 def index():
     clusters = {
         "indoor": LearningType.CENTRALIZED,
+        "personalized": LearningType.PERSONALIZED,
         "outdoor": LearningType.FEDERATED
     }
 
-    num_clients = 4
+    num_clients = 3
 
     initialize_server(clusters, num_clients)
 
@@ -197,8 +198,10 @@ def initialize_server(required_clusters, num_clients):
 
         if required_clusters[cluster_name] == LearningType.CENTRALIZED:
             learning_type = 'centralized'
-        else:
+        elif required_clusters[cluster_name] == LearningType.FEDERATED:
             learning_type = 'federated'
+        else:
+            learning_type = 'personalized'
 
         for client_id in free_clients:
             CLIENTS[client_id].set_learning_type(required_clusters[cluster_name])

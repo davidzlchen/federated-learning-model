@@ -6,6 +6,7 @@ class LearningType(Enum):
     CENTRALIZED = 1
     FEDERATED = 2
     HYBRID = 3
+    PERSONALIZED = 4
 
 
 class ClientState(Enum):
