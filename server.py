@@ -55,18 +55,17 @@ NETWORK = None
 CONFIGURATION = Configuration(LearningType.FEDERATED)
 
 pinged_once = False
-NUM_CLIENTS = 2
 CLUSTERS = {}
 
 # TODO: set global CONFIGURATION with GUI data, not programmer setting
 @app.route('/')
 def index():
     clusters = {
-        "indoor": LearningType.CENTRALIZED,
-        "outdoor": LearningType.FEDERATED
+        "indoor": LearningType.CENTRALIZED
+        #"outdoor": LearningType.FEDERATED
     }
 
-    num_clients = 4
+    num_clients = 1
 
     initialize_server(clusters, num_clients)
 
@@ -382,18 +381,6 @@ def initialize_new_clients(client_id):
     #     initialize_datablocks(client_id)
 
     mqtt.subscribe('client/' + client_id)
-
-
-def add_client_to_cluster(client_id):
-    global CLUSTERS
-
-    for cluster in CLUSTERS.keys():
-        if len(CLUSTERS[cluster].get_clients()) < (NUM_CLIENTS / len(CLUSTERS.keys())):
-            CLUSTERS[cluster].get_clients().append(client_id)
-            return
-
-    print("ERROR: Could not find an empty cluster.")
-
 
 
 def initialize_new_image(client_name, dimensions, label):
