@@ -19,7 +19,7 @@ DEFAULT_BATCH_SIZE = 15
 
 DATABLOCK = Datablock()
 DATA_INDEX = 0
-MODEL_TRAIN_SIZE = 24
+MODEL_TRAIN_SIZE = 120
 RUNNER = None
 CONFIGURATION = Configuration()
 TOTAL_DATA_COUNT = 240
@@ -213,7 +213,7 @@ def on_message(client, userdata, msg):
     message_type = payload["message"]
 
     if msg.topic == CLUSTER_TOPIC:
-        process_network_data(message_type, payload)
+        process_network_data(client, message_type, payload)
 
     elif message_type == constants.START_LEARNING:
         if CONFIGURATION.learning_type == LearningType.FEDERATED:
@@ -252,7 +252,7 @@ def on_message(client, userdata, msg):
         print('Could not handle message: {} -- topic: {}'.format(message_type, msg.topic))
 
 
-def process_network_data(message_type, payload):
+def process_network_data(client, message_type, payload):
     global NETWORK_STRING
 
     if message_type == constants.DEFAULT_NETWORK_INIT:
@@ -266,9 +266,9 @@ def process_network_data(message_type, payload):
         state_dict = decode_state_dictionary(NETWORK_STRING)
         if CONFIGURATION.learning_type == LearningType.FEDERATED:
             if DATA_INDEX + MODEL_TRAIN_SIZE > TOTAL_DATA_COUNT:
-                print("Done!")
-                exit()
-            send_model(state_dict)
+                send_typed_message(client, DEVICE_TOPIC, json.dumps(constants.DEFAULT_ITERATION_END_MESSAGE), MessageType.SIMPLE)
+            else:
+                send_model(state_dict)
         else:
             test(True)
 
