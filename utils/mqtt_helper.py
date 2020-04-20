@@ -1,6 +1,7 @@
 import base64
 import json
 import pickle
+import sys
 
 from common.configuration import ConfigurationEncoder
 from utils import constants
@@ -67,6 +68,7 @@ def send_image_chunk_message(client, topic, sample):
         image_message_chunk['data'] = chunk
         client.publish(topic, json.dumps(image_message_chunk))
     client.publish(topic, json.dumps(constants.DEFAULT_IMAGE_END_MESSAGE))
+    return int(sys.getsizeof(image_encoded))
 
 
 def send_result_data_message(client, topic, result_data_instance):
@@ -86,7 +88,7 @@ def send_typed_message(client, topic, message, message_type):
     if message_type is MessageType.NETWORK_CHUNK:
         send_network_chunk_message(client, topic, message)
     elif message_type is MessageType.IMAGE_CHUNK:
-        send_image_chunk_message(client, topic, message)
+        return send_image_chunk_message(client, topic, message)
     elif message_type is MessageType.CONFIGURATION:
         send_configuration_message(client, topic, message)
     elif message_type is MessageType.SIMPLE:
