@@ -65,6 +65,24 @@ def index():
 
         return "server initialized and message sent"
 
+@app.route('/')
+def debug():
+    if request.method == 'GET':
+        num_clients = 2
+        operation_mode = LearningType.FEDERATED
+        clusters = {
+            "ground": operation_mode,
+        }
+        initialize_server(clusters, num_clients)
+
+        send_typed_message(
+            mqtt,
+            'server/general',
+            constants.START_LEARNING_MESSAGE,
+            MessageType.SIMPLE)
+
+        return "DEBUG - server initialized and message sent"
+
 
 @socketio.on('connect')
 def connection():
