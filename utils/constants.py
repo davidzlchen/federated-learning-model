@@ -56,6 +56,11 @@ CONFIGURATION_MESSAGE = {
     'message': CONFIGURATION_MESSAGE_SIGNAL
 }
 
+DEFAULT_ITERATION_END = 'done testing all iterations'
+DEFAULT_ITERATION_END_MESSAGE = {
+    'message': DEFAULT_ITERATION_END
+}
+
 '''
 Section for Topics
 '''
