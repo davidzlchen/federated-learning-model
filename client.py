@@ -3,6 +3,7 @@ import time
 import json
 import numpy as np
 import uuid
+import sys
 
 import paho.mqtt.client as mqtt
 from common import person_classifier
@@ -17,6 +18,7 @@ import traceback
 
 NETWORK_STRING = ''
 DEFAULT_BATCH_SIZE = 15
+DATA_SIZE = 0
 
 DATABLOCK = Datablock()
 DATA_INDEX = 0
@@ -81,6 +83,7 @@ def reconstruct_model():
 
 def test(reconstruct=False):
     global RUNNER
+    global DATA_SIZE
 
     if not RUNNER:
         RUNNER = person_classifier.get_model_runner()
@@ -89,6 +92,7 @@ def test(reconstruct=False):
         RUNNER.model.load_state_dictionary(state_dictionary)
 
     ResultData = RUNNER.test_model()
+    ResultData.size += DATA_SIZE
     send_typed_message(
         client,
         DEVICE_TOPIC,
@@ -102,7 +106,7 @@ def test(reconstruct=False):
 
 def publish_encoded_image(image, label):
     sample = (image, label)
-    send_typed_message(client, DEVICE_TOPIC, sample, MessageType.IMAGE_CHUNK)
+    return send_typed_message(client, DEVICE_TOPIC, sample, MessageType.IMAGE_CHUNK)
 
 
 def publish_encoded_model(payload):
@@ -114,12 +118,12 @@ def publish_encoded_model(payload):
 
 
 def send_images():
-    global DATABLOCK, DATA_INDEX
+    global DATABLOCK, DATA_INDEX, DATA_SIZE
 
     for i in range(DATA_INDEX, DATA_INDEX + DEFAULT_BATCH_SIZE):
         image = DATABLOCK.image_data[i]
         label = DATABLOCK.labels[i]
-        publish_encoded_image(image, label)
+        DATA_SIZE += publish_encoded_image(image, label)
     print(
         "images {} to {} sent".format(
             DATA_INDEX,
@@ -127,6 +131,7 @@ def send_images():
             DEFAULT_BATCH_SIZE -
             1))
     DATA_INDEX += DEFAULT_BATCH_SIZE
+
 
     end_msg = {
         'message': 'all_images_sent'
@@ -159,14 +164,16 @@ def setup_data():
 
 
 def send_model(statedict):
+    global DATA_SIZE
     train(statedict)
+    state_dict = RUNNER.model.get_state_dictionary()
+    binary_state_dict = encode_state_dictionary(state_dict)
+    DATA_SIZE = int(sys.getsizeof(binary_state_dict))
+    print(DATA_SIZE)
     test()
 
     print("Finished testing model.")
 
-    state_dict = RUNNER.model.get_state_dictionary()
-
-    binary_state_dict = encode_state_dictionary(state_dict)
     publish_encoded_model(binary_state_dict)
 
     print('State dictionary sent to central server!')
@@ -284,7 +291,7 @@ def process_network_data(client, message_type, payload):
 
 
 def reset_client():
-    global CONFIGURATION, CLUSTER_TOPIC, NETWORK_STRING, DATABLOCK, DATA_INDEX, RUNNER
+    global CONFIGURATION, CLUSTER_TOPIC, NETWORK_STRING, DATABLOCK, DATA_INDEX, RUNNER, DATA_SIZE
 
     CONFIGURATION.learning_type = LearningType.NONE
     CLUSTER_TOPIC = None
@@ -293,6 +300,7 @@ def reset_client():
     DATABLOCK = Datablock()
     DATA_INDEX = 0
 
+    DATA_SIZE = 0
     RUNNER = None
 
 
