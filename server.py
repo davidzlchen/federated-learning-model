@@ -20,6 +20,9 @@ from utils import constants
 from utils.enums import LearningType, ClientState
 from utils.model_helper import encode_state_dictionary
 from utils.mqtt_helper import MessageType, send_typed_message
+import sqlite3
+import atexit
+
 
 sys.path.append('.')
 
@@ -34,6 +37,10 @@ cors = CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 mqtt = Mqtt(app, mqtt_logging=True)
 
+# establish db connection
+conn = sqlite3.connect("runs.db")
+cursor = conn.cursor()
+
 # global variables
 PACKET_SIZE = 3000
 CLIENTS = {}
@@ -42,6 +49,13 @@ CLIENT_NETWORKS = {}
 CLUSTERS = {}
 NETWORK = None
 CLIENTS_DONE = {}
+
+# register exit handler
+def exit_handler():
+    conn.close()
+
+
+atexit.register(exit_handler)
 
 
 @app.route('/', methods=['POST'])
@@ -417,5 +431,13 @@ def initialize_datablocks(client):
     CLIENT_DATABLOCKS[client] = Datablock()
 
 
+def initialize_database():
+    # create table if it doesn't exist
+
+    cursor.execute("""CREATE TABLE IF NOT EXISTS runs(RunID INT, ClientID VARCHAR(255), LearningType VARCHAR(255), Accuracy FLOAT, EpochNum INT, Iteration INT, PRIMARY KEY (RunID, Iteration, ClienID))""")
+
+
+
 if __name__ == '__main__':
+    initialize_database()
     socketio.run(app, port=5000, host='0.0.0.0')
