@@ -113,27 +113,19 @@ def publish_encoded_model(payload):
 
 
 def send_images():
-    persons_data = pickle.load(open('./data/personimages.pkl', 'rb'))
-    no_persons_data = pickle.load(open('./data/nopersonimages.pkl', 'rb'))
+    global DATABLOCK, DATA_INDEX
 
-    batch_size = DEFAULT_BATCH_SIZE
-    counter = 0
-    for label, images in enumerate([no_persons_data, persons_data]):
-
-        # for chunk in divide_chunks(images, batch_size):
-        #     for sample in chunk:
-        #         image, _ = sample
-        #         publish_encoded_image(image, label)
-        #     print('Sleep after sending batch of {}'.format(batch_size))
-        #     time.sleep(1)
-
-        for image, attributes in images:
-            publish_encoded_image(image, label)
-            counter += 1
-            if counter % 15 == 0:
-                time.sleep(1)
-                print('{} images sent, sleeping for 1 second.'.format(batch_size))
-    print('sent all images!')
+    for i in range(DATA_INDEX, DATA_INDEX + DEFAULT_BATCH_SIZE):
+        image = DATABLOCK.image_data[i]
+        label = DATABLOCK.labels[i]
+        publish_encoded_image(image, label)
+    print(
+        "images {} to {} sent".format(
+            DATA_INDEX,
+            DATA_INDEX +
+            DEFAULT_BATCH_SIZE -
+            1))
+    DATA_INDEX += DEFAULT_BATCH_SIZE
 
     end_msg = {
         'message': 'all_images_sent'
@@ -213,13 +205,14 @@ def on_message(client, userdata, msg):
     message_type = payload["message"]
 
     if msg.topic == CLUSTER_TOPIC:
-        process_network_data(message_type, payload)
+        process_network_data(client, message_type, payload)
 
     elif message_type == constants.START_LEARNING:
         if CONFIGURATION.learning_type == LearningType.FEDERATED:
             setup_data()
             send_model(None)
         elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
+            setup_data()
             send_images()
         elif CONFIGURATION.learning_type == LearningType.PERSONALIZED:
             personalized()
@@ -252,7 +245,7 @@ def on_message(client, userdata, msg):
         print('Could not handle message: {} -- topic: {}'.format(message_type, msg.topic))
 
 
-def process_network_data(message_type, payload):
+def process_network_data(client, message_type, payload):
     global NETWORK_STRING
 
     if message_type == constants.DEFAULT_NETWORK_INIT:
@@ -266,9 +259,18 @@ def process_network_data(message_type, payload):
         state_dict = decode_state_dictionary(NETWORK_STRING)
         if CONFIGURATION.learning_type == LearningType.FEDERATED:
             if DATA_INDEX + MODEL_TRAIN_SIZE > TOTAL_DATA_COUNT:
-                print("Done!")
-                exit()
-            send_model(state_dict)
+                send_typed_message(client, DEVICE_TOPIC, json.dumps(constants.DEFAULT_ITERATION_END_MESSAGE), MessageType.SIMPLE)
+                print("client is finished")
+            else:
+                send_model(state_dict)
+        elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
+            if DATA_INDEX + DEFAULT_BATCH_SIZE > TOTAL_DATA_COUNT:
+                test(True)
+                send_typed_message(client, DEVICE_TOPIC, json.dumps(constants.DEFAULT_ITERATION_END_MESSAGE), MessageType.SIMPLE)
+                print("client is finished")
+            else:
+                test(True)
+                send_images()
         else:
             test(True)
 
