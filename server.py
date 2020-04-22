@@ -37,10 +37,6 @@ cors = CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 mqtt = Mqtt(app, mqtt_logging=True)
 
-# establish db connection
-conn = sqlite3.connect("runs.db")
-cursor = conn.cursor()
-
 # global variables
 PACKET_SIZE = 3000
 CLIENTS = {}
@@ -51,12 +47,27 @@ NETWORK = None
 CLIENTS_DONE = {}
 
 # register exit handler
-def exit_handler():
-    conn.close()
+# def exit_handler():
+#     conn.close()
 
 
-atexit.register(exit_handler)
+# atexit.register(exit_handler)
 
+@app.route('/test', methods=['GET'])
+def test():
+    num_clients = 1
+    clusters = {
+        'indoor': LearningType.CENTRALIZED
+    }
+
+    initialize_server(clusters, num_clients)
+    send_typed_message(
+        mqtt,
+        'server/general',
+        constants.START_LEARNING_MESSAGE,
+        MessageType.SIMPLE)
+
+    return 'server initialized and msg sent'
 
 @app.route('/', methods=['POST'])
 def index():
@@ -432,12 +443,21 @@ def initialize_datablocks(client):
 
 
 def initialize_database():
+    # establish db connection
+    conn = sqlite3.connect("runs.db")
+    cursor = conn.cursor()
+
     # create table if it doesn't exist
 
-    cursor.execute("""CREATE TABLE IF NOT EXISTS runs(RunID INT, ClientID VARCHAR(255), LearningType VARCHAR(255), Accuracy FLOAT, EpochNum INT, Iteration INT, PRIMARY KEY (RunID, Iteration, ClienID))""")
+    cursor.execute("""CREATE TABLE IF NOT EXISTS runs(RunID INT, ClientID VARCHAR(255), LearningType VARCHAR(255), TrainLoss FLOAT, TestLoss FLOAT, NumEpochs INT, Iteration INT, PRIMARY KEY (RunID, Iteration, ClientID))""")
+
+    conn.commit()
+    conn.close()
+
 
 
 
 if __name__ == '__main__':
     initialize_database()
-    socketio.run(app, port=5000, host='0.0.0.0')
+    socketio.run(app, port=4000, host='0.0.0.0')
+
