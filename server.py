@@ -24,7 +24,7 @@ from utils.mqtt_helper import MessageType, send_typed_message
 sys.path.append('.')
 
 app = Flask(__name__)
-app.config['MQTT_BROKER_URL'] = 'localhost'
+app.config['MQTT_BROKER_URL'] = 'broker.hivemq.com'
 app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_KEEPALIVE'] = 1000
 app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
@@ -53,7 +53,7 @@ def index():
         num_clients = body.get('numDevices', 2)
         operation_mode = LearningType(body.get('operationMode', 1))
         clusters = {
-            "indoor": operation_mode,
+            "ground": operation_mode,
             #"outdoor": operation_mode
         }
         initialize_server(clusters, num_clients)
