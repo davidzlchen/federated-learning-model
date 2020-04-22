@@ -12,6 +12,7 @@ import utils.constants as constants
 from utils.mqtt_helper import send_typed_message, MessageType, divide_chunks
 from utils.model_helper import decode_state_dictionary, encode_state_dictionary
 from common.configuration import *
+from utils.image_helper import get_images_for_cluster
 import traceback
 
 NETWORK_STRING = ''
@@ -139,13 +140,20 @@ def send_images():
 
 def setup_data():
     global DATABLOCK, DATA_INDEX
-    persons_data = pickle.load(open('./data/personimages.pkl', 'rb'))
-    no_persons_data = pickle.load(open('./data/nopersonimages.pkl', 'rb'))
+    data = pickle.load(open('./data/federated-learning-data.pkl', 'rb'))
+    images_in_cluster = get_images_for_cluster(data, CLUSTER_TOPIC)
+    print("# of Images in Cluster: ", len(images_in_cluster))
 
-    for label, images in enumerate([no_persons_data, persons_data]):
-        for image, _ in images:
-            DATABLOCK.init_new_image(image.shape, label)
-            DATABLOCK.image_data[-1] = image
+    for image, attributes in images_in_cluster:
+        label = 0
+        if "person" in attributes:
+            label = 1
+        elif "no-person" in attributes:
+            label = 0
+        else:
+            print("SOMETHING IS BROKEN WITH DATA LABELING")
+        DATABLOCK.init_new_image(image.shape, label)
+        DATABLOCK.image_data[-1] = image
 
     DATABLOCK.shuffle_data()
 
