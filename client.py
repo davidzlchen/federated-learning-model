@@ -18,7 +18,6 @@ from utils.image_helper import get_images_for_cluster
 import traceback
 
 NETWORK_STRING = ''
-DEFAULT_BATCH_SIZE = 15
 DATA_SIZE = 0
 
 DATABLOCK = Datablock()
@@ -26,7 +25,7 @@ DATA_INDEX = 0
 MODEL_TRAIN_SIZE = 24
 RUNNER = None
 CONFIGURATION = Configuration()
-TOTAL_DATA_COUNT = 240
+TOTAL_DATA_COUNT = 0
 
 PI_ID = 'pi{}'.format(uuid.uuid4())
 DEVICE_TOPIC = 'client/{}'.format(PI_ID)
@@ -85,6 +84,8 @@ def reconstruct_model():
 def test(reconstruct=False):
     global RUNNER
     global DATA_SIZE
+    global DATA_INDEX
+    global MODEL_TRAIN_SIZE
 
     if not RUNNER:
         RUNNER = person_classifier.get_model_runner()
@@ -95,6 +96,8 @@ def test(reconstruct=False):
     ResultData = RUNNER.test_model()
     ResultData.size += DATA_SIZE
     ResultData.specs = platform.uname()
+    ResultData.iteration = DATA_INDEX/MODEL_TRAIN_SIZE
+    ResultData.epochs = RUNNER.epochs
     send_typed_message(
         client,
         DEVICE_TOPIC,
@@ -122,7 +125,7 @@ def publish_encoded_model(payload):
 def send_images():
     global DATABLOCK, DATA_INDEX, DATA_SIZE
 
-    for i in range(DATA_INDEX, DATA_INDEX + DEFAULT_BATCH_SIZE):
+    for i in range(DATA_INDEX, DATA_INDEX + MODEL_TRAIN_SIZE):
         image = DATABLOCK.image_data[i]
         label = DATABLOCK.labels[i]
         DATA_SIZE += publish_encoded_image(image, label)
@@ -130,9 +133,9 @@ def send_images():
         "images {} to {} sent".format(
             DATA_INDEX,
             DATA_INDEX +
-            DEFAULT_BATCH_SIZE -
+            MODEL_TRAIN_SIZE -
             1))
-    DATA_INDEX += DEFAULT_BATCH_SIZE
+    DATA_INDEX += MODEL_TRAIN_SIZE
 
 
     end_msg = {
@@ -281,7 +284,7 @@ def process_network_data(client, message_type, payload):
             else:
                 send_model(state_dict)
         elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
-            if DATA_INDEX + DEFAULT_BATCH_SIZE > TOTAL_DATA_COUNT:
+            if DATA_INDEX + MODEL_TRAIN_SIZE > TOTAL_DATA_COUNT:
                 test(True)
                 send_typed_message(client, DEVICE_TOPIC, json.dumps(constants.DEFAULT_ITERATION_END_MESSAGE), MessageType.SIMPLE)
                 print("client is finished")
