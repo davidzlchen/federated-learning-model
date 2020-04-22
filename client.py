@@ -4,6 +4,7 @@ import json
 import numpy as np
 import uuid
 import sys
+import platform
 
 import paho.mqtt.client as mqtt
 from common import person_classifier
@@ -92,6 +93,7 @@ def test(reconstruct=False):
 
     ResultData = RUNNER.test_model()
     ResultData.size += DATA_SIZE
+    ResultData.specs = platform.uname()
     send_typed_message(
         client,
         DEVICE_TOPIC,
@@ -302,7 +304,7 @@ client = mqtt.Client(client_id=PI_ID)
 client.on_connect = on_connect
 client.on_message = on_message
 client.on_log = on_log
-client.connect("localhost", 1883, 65534)
+client.connect("broker.hivemq.com", 1883, 65534)
 
 # Blocking call that processes network traffic, dispatches callbacks and
 # handles reconnecting.
