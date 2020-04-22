@@ -153,6 +153,7 @@ def setup_data():
     data = pickle.load(open('./data/federated-learning-data.pkl', 'rb'))
     images_in_cluster = get_images_for_cluster(data, CLUSTER_TOPIC)
     print("# of Images in Cluster: ", len(images_in_cluster))
+    TOTAL_DATA_COUNT = len(images_in_cluster)
 
     for image, attributes in images_in_cluster:
         label = 0
