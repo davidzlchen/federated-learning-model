@@ -2,9 +2,10 @@ import json
 
 
 class ResultData(object):
-    def __init__(self, test_loss=-1, model_accuracy=-1, size=-1):
+    def __init__(self, test_loss=-1, model_accuracy=-1, size=-1, specs=-1):
         self.test_loss = test_loss
         self.model_accuracy = model_accuracy
+        self.specs = specs
         self.size = size
 
 
@@ -17,7 +18,8 @@ class ResultDataEncoder(json.JSONEncoder):
                 "test_loss": str(
                     obj.test_loss),
                 "model_accuracy": model_acc_str,
-                "size": str(obj.size)}
+                "size": str(obj.size),
+                "specs": str(obj.specs)}
 
         return json.JSONEncoder.default(self, obj)
 
@@ -27,4 +29,5 @@ def as_result_data(dct):
         test_loss = dct["test_loss"]
         model_accuracy = dct["model_accuracy"]
         size = dct["size"]
-        return ResultData(test_loss, model_accuracy, size)
+        specs = dct["specs"]
+        return ResultData(test_loss, model_accuracy, size, specs)
