@@ -41,6 +41,7 @@ CLIENT_DATABLOCKS = {}
 CLIENT_NETWORKS = {}
 CLUSTERS = {}
 NETWORK = None
+CLIENTS_DONE = {}
 
 
 @app.route('/', methods=['POST'])
@@ -49,11 +50,11 @@ def index():
         body = request.get_json()
         print(body)
 
-        num_clients = body.get('numDevices', 1)
+        num_clients = body.get('numDevices', 2)
         operation_mode = LearningType(body.get('operationMode', 1))
         clusters = {
             "indoor": operation_mode,
-            "outdoor": operation_mode
+            #"outdoor": operation_mode
         }
         initialize_server(clusters, num_clients)
 
@@ -115,6 +116,9 @@ def handle_mqtt_message(client, userdata, msg):
     client_name = msg.topic.split("/")[1]
     if message == constants.RESULT_DATA_MESSAGE_SIGNAL:
         receive_result_data(client_name, payload['data'])
+
+    if message == constants.DEFAULT_ITERATION_END:
+        CLIENTS_DONE[client] = True
 
     if client_name in CLIENTS:
         if CLIENTS[client_name].get_learning_type() == LearningType.FEDERATED:
@@ -375,6 +379,7 @@ def collect_centralized_data(data, message, client_name, dimensions, label):
 def initialize_new_clients(client_id):
     print("New client connected: {}".format(client_id))
     CLIENTS[client_id] = ClientBlock(ClientState.FREE)
+    CLIENTS_DONE[client_id] = False
     mqtt.subscribe('client/' + client_id)
 
 
