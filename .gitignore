@@ -4,3 +4,4 @@ __pycache__/
 ENV/
 *.pyc
 *.pth
+runs.db
