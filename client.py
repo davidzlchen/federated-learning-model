@@ -149,7 +149,7 @@ def send_images():
 
 
 def setup_data():
-    global DATABLOCK, DATA_INDEX
+    global DATABLOCK, DATA_INDEX, TOTAL_DATA_COUNT
     data = pickle.load(open('./data/federated-learning-data.pkl', 'rb'))
     images_in_cluster = get_images_for_cluster(data, CLUSTER_TOPIC)
     print("# of Images in Cluster: ", len(images_in_cluster))
