@@ -365,8 +365,6 @@ def receive_result_data(client_id, data):
     cursor.execute("""INSERT INTO runs(RunID, UTCDateTime, ClientID, ClientHardware, LearningType, ModelAccuracy, TestLoss, NumEpochs, Iteration) VALUES(?,?,?,?,?,?,?,?,?)""", data);
     conn.commit()
 
-    cursor.execute("SELECT * FROM runs")
-
     conn.close()
 
     print(
