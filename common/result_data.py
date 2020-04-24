@@ -36,4 +36,4 @@ def as_result_data(dct):
         specs = dct["specs"]
         iteration = dct["iteration"]
         epochs = dct["epochs"]
-        return ResultData(test_loss, model_accuracy, size, specs)
+        return ResultData(test_loss, model_accuracy, size, specs, iteration, epochs)
