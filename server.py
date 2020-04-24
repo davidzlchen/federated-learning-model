@@ -2,7 +2,7 @@ import json
 import sys
 import traceback
 
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from flask_socketio import SocketIO
 from flask_mqtt import Mqtt
 from flask_cors import CORS
@@ -21,8 +21,8 @@ from utils.enums import LearningType, ClientState
 from utils.model_helper import encode_state_dictionary
 from utils.mqtt_helper import MessageType, send_typed_message
 import sqlite3
-import atexit
-
+import uuid
+import datetime
 
 sys.path.append('.')
 
@@ -44,20 +44,29 @@ CLIENT_DATABLOCKS = {}
 CLIENT_NETWORKS = {}
 CLUSTERS = {}
 NETWORK = None
-CLIENTS_DONE = {}
 
-# register exit handler
-# def exit_handler():
-#     conn.close()
+CENTRALIZED_EPOCHS = 5
+RUN_ID = None
 
 
-# atexit.register(exit_handler)
+@app.route('/getAllRuns', methods=['GET'])
+def get_runs():
+    conn = sqlite3.connect("runs.db")
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM runs")
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return jsonify(rows)
+
 
 @app.route('/test', methods=['GET'])
 def test():
     num_clients = 1
     clusters = {
-        'indoor': LearningType.CENTRALIZED
+        'water': LearningType.CENTRALIZED
     }
 
     initialize_server(clusters, num_clients)
@@ -68,6 +77,7 @@ def test():
         MessageType.SIMPLE)
 
     return 'server initialized and msg sent'
+
 
 @app.route('/', methods=['POST'])
 def index():
@@ -90,6 +100,7 @@ def index():
             MessageType.SIMPLE)
 
         return "server initialized and message sent"
+
 
 @app.route('/')
 def debug():
@@ -124,7 +135,7 @@ def handle_connect(client, userdata, flags, rc):
 
 @mqtt.on_message()
 def handle_mqtt_message(client, userdata, msg):
-    global CLUSTERS, faults
+    global CLUSTERS, CLIENTS
 
     payload = json.loads(msg.payload.decode())
     dimensions = payload.get("dimensions", None)
@@ -143,7 +154,7 @@ def handle_mqtt_message(client, userdata, msg):
         receive_result_data(client_name, payload['data'])
 
     if message == constants.DEFAULT_ITERATION_END:
-        CLIENTS_DONE[client] = True
+        CLIENTS[client_name].set_state(ClientState.FREE);
 
     if client_name in CLIENTS:
         if CLIENTS[client_name].get_learning_type() == LearningType.FEDERATED:
@@ -171,9 +182,11 @@ def handle_mqtt_message(client, userdata, msg):
 
 
 def initialize_server(required_clusters, num_clients):
-    global CLUSTERS, CLIENTS
+    global CLUSTERS, CLIENTS, RUN_ID
 
     reset()
+
+    RUN_ID = str(uuid.uuid4())
 
     if num_clients % len(required_clusters) != 0:
         raise ValueError(
@@ -236,8 +249,9 @@ def get_free_clients(num_required):
 
 
 def reset():
-    global CLIENT_NETWORKS, CLIENT_DATABLOCKS, CLUSTERS, CLIENTS
+    global CLIENT_NETWORKS, CLIENT_DATABLOCKS, CLUSTERS, CLIENTS, RUN_ID
 
+    RUN_ID = None
     CLIENT_NETWORKS.clear()
     CLIENT_DATABLOCKS.clear()
     CLUSTERS.clear()
@@ -277,7 +291,7 @@ def perform_centralized_learning(clients, cluster):
         k: v for (k, v) in CLIENT_DATABLOCKS.items() if k in clients}
 
     runner = person_classifier.get_model_runner(
-        client_data=applicable_client_datablocks, num_epochs=1)
+        client_data=applicable_client_datablocks, num_epochs=CENTRALIZED_EPOCHS)
 
     if CLUSTERS[cluster].get_state_dict() is not None:
         runner.model.load_state_dictionary(CLUSTERS[cluster].get_state_dict())
@@ -340,16 +354,28 @@ def perform_hybrid_learning():
         print(traceback.format_exc())
 
 
-def receive_result_data(client_name, data):
-    print(data)  # buried under mountain of tensor prints
+def receive_result_data(client_id, data):
+    # print(data)  # buried under mountain of tensor prints
     result_data_object = as_result_data(data)
+
+    conn = sqlite3.connect("runs.db")
+    cursor = conn.cursor()
+
+    data = (RUN_ID, datetime.datetime.utcnow().isoformat(), client_id, result_data_object.specs, CLIENTS[client_id].get_learning_type().name, result_data_object.model_accuracy, result_data_object.test_loss, result_data_object.epochs, result_data_object.iteration)
+    cursor.execute("""INSERT INTO runs(RunID, UTCDateTime, ClientID, ClientHardware, LearningType, ModelAccuracy, TestLoss, NumEpochs, Iteration) VALUES(?,?,?,?,?,?,?,?,?)""", data);
+    conn.commit()
+
+    cursor.execute("SELECT * FROM runs")
+
+    conn.close()
+
     print(
         "{}: Test Loss: {}".format(
-            client_name,
+            client_id,
             result_data_object.test_loss))
     print(
         "{}: Accuracy: {}".format(
-            client_name,
+            client_id,
             result_data_object.model_accuracy))
 
 
@@ -404,7 +430,6 @@ def collect_centralized_data(data, message, client_name, dimensions, label):
 def initialize_new_clients(client_id):
     print("New client connected: {}".format(client_id))
     CLIENTS[client_id] = ClientBlock(ClientState.FREE)
-    CLIENTS_DONE[client_id] = False
     mqtt.subscribe('client/' + client_id)
 
 
@@ -449,7 +474,7 @@ def initialize_database():
 
     # create table if it doesn't exist
 
-    cursor.execute("""CREATE TABLE IF NOT EXISTS runs(RunID INT, ClientID VARCHAR(255), LearningType VARCHAR(255), TrainLoss FLOAT, TestLoss FLOAT, NumEpochs INT, Iteration INT, PRIMARY KEY (RunID, Iteration, ClientID))""")
+    cursor.execute("""CREATE TABLE IF NOT EXISTS runs(RunID VARCHAR(255), UTCDateTime VARCHAR(255), ClientID VARCHAR(255), ClientHardware TEXT, LearningType VARCHAR(255), ModelAccuracy FLOAT, TestLoss FLOAT, NumEpochs INT, Iteration INT, PRIMARY KEY (RunID, Iteration, ClientID))""")
 
     conn.commit()
     conn.close()
@@ -459,5 +484,5 @@ def initialize_database():
 
 if __name__ == '__main__':
     initialize_database()
-    socketio.run(app, port=4000, host='0.0.0.0')
+    socketio.run(app, port=5000, host='0.0.0.0')
 
