@@ -1,4 +1,5 @@
 import json
+import pickle
 import sys
 import traceback
 
@@ -44,7 +45,7 @@ CLIENT_DATABLOCKS = {}
 CLIENT_NETWORKS = {}
 CLUSTERS = {}
 NETWORK = None
-
+TEST_DATABLOCKS = dict()
 CENTRALIZED_EPOCHS = 5
 RUN_ID = None
 
@@ -64,9 +65,9 @@ def get_runs():
 
 @app.route('/test', methods=['GET'])
 def test():
-    num_clients = 1
+    num_clients = 2
     clusters = {
-        'water': LearningType.CENTRALIZED
+        'ground': LearningType.CENTRALIZED
     }
 
     initialize_server(clusters, num_clients)
@@ -76,7 +77,7 @@ def test():
         constants.START_LEARNING_MESSAGE,
         MessageType.SIMPLE)
 
-    return 'server initialized and msg sent'
+    return 'TEST - server initialized and msg sent'
 
 
 @app.route('/', methods=['POST'])
@@ -100,25 +101,6 @@ def index():
             MessageType.SIMPLE)
 
         return "server initialized and message sent"
-
-
-@app.route('/')
-def debug():
-    if request.method == 'GET':
-        num_clients = 2
-        operation_mode = LearningType.FEDERATED
-        clusters = {
-            "ground": operation_mode,
-        }
-        initialize_server(clusters, num_clients)
-
-        send_typed_message(
-            mqtt,
-            'server/general',
-            constants.START_LEARNING_MESSAGE,
-            MessageType.SIMPLE)
-
-        return "DEBUG - server initialized and message sent"
 
 
 @socketio.on('connect')
@@ -195,6 +177,8 @@ def initialize_server(required_clusters, num_clients):
     clients_per_cluster = num_clients / len(required_clusters)
     print("clients per cluster: {}".format(clients_per_cluster))
 
+    generate_test_datablocks(required_clusters)
+
     for cluster_name in required_clusters:
         free_clients = get_free_clients(clients_per_cluster)
         CLUSTERS[cluster_name] = ClusterBlock(
@@ -231,6 +215,18 @@ def initialize_server(required_clusters, num_clients):
                 MessageType.SIMPLE)
 
 
+def generate_test_datablocks(clusters):
+    global TEST_DATABLOCKS
+    data = pickle.load(open('./data/federated-learning-data.pkl', 'rb'))
+    num_images = len(data)
+    split_index = int(num_images * 4 / 5)  # 20% for testing
+    test_data = data[split_index:]
+
+    for cluster in clusters:
+        TEST_DATABLOCKS[cluster] = Datablock()
+        TEST_DATABLOCKS[cluster].add_images_for_cluster(test_data, "cluster/"+cluster)
+
+
 # grabs [num_required] free clients and sets status of clients to STALE
 def get_free_clients(num_required):
     global CLIENTS
@@ -255,6 +251,7 @@ def reset():
     CLIENT_NETWORKS.clear()
     CLIENT_DATABLOCKS.clear()
     CLUSTERS.clear()
+    TEST_DATABLOCKS.clear()
 
     for client in CLIENTS:
         CLIENTS[client].set_state(ClientState.FREE)
@@ -290,8 +287,12 @@ def perform_centralized_learning(clients, cluster):
     applicable_client_datablocks = {
         k: v for (k, v) in CLIENT_DATABLOCKS.items() if k in clients}
 
+    test_datablock_dict = {
+        'test_datablock': TEST_DATABLOCKS[cluster]
+    }
+
     runner = person_classifier.get_model_runner(
-        client_data=applicable_client_datablocks, num_epochs=CENTRALIZED_EPOCHS)
+        client_data=applicable_client_datablocks, test_data=test_datablock_dict, num_epochs=CENTRALIZED_EPOCHS)
 
     if CLUSTERS[cluster].get_state_dict() is not None:
         runner.model.load_state_dictionary(CLUSTERS[cluster].get_state_dict())
