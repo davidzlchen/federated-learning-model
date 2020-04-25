@@ -315,7 +315,7 @@ client = mqtt.Client(client_id=PI_ID)
 client.on_connect = on_connect
 client.on_message = on_message
 client.on_log = on_log
-client.connect("broker.hivemq.com", 1883, 65534)
+client.connect("localhost", 1883, 65534)
 
 # Blocking call that processes network traffic, dispatches callbacks and
 # handles reconnecting.
