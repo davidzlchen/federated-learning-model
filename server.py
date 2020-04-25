@@ -29,6 +29,7 @@ sys.path.append('.')
 
 app = Flask(__name__)
 app.config['MQTT_BROKER_URL'] = 'localhost'
+#app.config['MQTT_BROKER_URL'] = 'broker.hivemq.com'
 app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_KEEPALIVE'] = 1000
 app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
@@ -200,19 +201,23 @@ def initialize_server(required_clusters, num_clients):
                 initialize_datablocks(client_id)
 
         # send msg to those clients saying this your cluster (for subscription)
+        client_index = 0
         for client_id in free_clients:
-
             message = {
                 'message': constants.SUBSCRIBE_TO_CLUSTER,
                 constants.CLUSTER_TOPIC_NAME: CLUSTERS[cluster_name].get_mqtt_topic_name(),
                 'learning_type': learning_type,
-                'client_id': client_id}
-
+                'client_id': client_id,
+                'num_clients_in_cluster': len(free_clients),
+                'client_index_in_cluster': client_index
+            }
             send_typed_message(
                 mqtt,
                 'server/general',
                 message,
                 MessageType.SIMPLE)
+
+            client_index += 1
 
 
 def generate_test_datablocks(clusters):
