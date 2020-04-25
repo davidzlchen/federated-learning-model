@@ -66,6 +66,7 @@ def index():
 
         return "server initialized and message sent"
 
+
 @app.route('/')
 def debug():
     if request.method == 'GET':
