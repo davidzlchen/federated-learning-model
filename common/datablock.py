@@ -70,7 +70,7 @@ class Datablock(object):
     # Used to add images for a cluster from preprocessed .pkl data
     def add_images_for_cluster(self, images, cluster_topic):
         images_in_cluster = get_images_for_cluster(images, cluster_topic)
-        print("# of Train Images in Cluster: ", len(images_in_cluster))
+        print("# of Images in Cluster: ", len(images_in_cluster))
 
         for image, attributes in images_in_cluster:
             label = 0
