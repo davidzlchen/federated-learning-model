@@ -1,4 +1,5 @@
 from utils.image_helper import transform_json_data_to_image_matrix
+from utils.image_helper import get_images_for_cluster
 import random
 
 
@@ -65,3 +66,21 @@ class Datablock(object):
         self.image_data = []
         self.dimensions = []
         self.labels = []
+
+    # Used to add images for a cluster from preprocessed .pkl data
+    def add_images_for_cluster(self, images, cluster_topic):
+        images_in_cluster = get_images_for_cluster(images, cluster_topic)
+        print("# of Images in Cluster: ", len(images_in_cluster))
+
+        for image, attributes in images_in_cluster:
+            label = 0
+            if "person" in attributes:
+                label = 1
+            elif "no-person" in attributes:
+                label = 0
+            else:
+                print("SOMETHING IS BROKEN WITH DATA LABELING")
+            self.init_new_image(image.shape, label)
+            self.image_data[-1] = image
+
+        self.shuffle_data()

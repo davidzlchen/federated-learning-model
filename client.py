@@ -14,13 +14,13 @@ import utils.constants as constants
 from utils.mqtt_helper import send_typed_message, MessageType, divide_chunks
 from utils.model_helper import decode_state_dictionary, encode_state_dictionary
 from common.configuration import *
-from utils.image_helper import get_images_for_cluster
 import traceback
 
 NETWORK_STRING = ''
 DATA_SIZE = 0
 
 DATABLOCK = Datablock()
+TEST_DATABLOCK = Datablock()
 DATA_INDEX = 0
 MODEL_TRAIN_SIZE = 24
 RUNNER = None
@@ -51,13 +51,16 @@ def personalized():
 
 
 def train(statedict):
-    global DATABLOCK, DATA_INDEX, MODEL_TRAIN_SIZE, RUNNER
+    global DATABLOCK, TEST_DATABLOCK, DATA_INDEX, MODEL_TRAIN_SIZE, RUNNER
     # print("State dict before training: ")
     # print(statedict)
     datablock_dict = {
         'pi01': DATABLOCK[DATA_INDEX:DATA_INDEX + MODEL_TRAIN_SIZE]}
 
-    RUNNER = person_classifier.get_model_runner(datablock_dict)
+    test_datablock_dict = {
+        'pi01': TEST_DATABLOCK}
+
+    RUNNER = person_classifier.get_model_runner(client_data=datablock_dict, test_data=test_datablock_dict)
 
     if DATA_INDEX != 0:
         RUNNER.model.load_state_dictionary(statedict)
@@ -82,13 +85,13 @@ def reconstruct_model():
 
 
 def test(reconstruct=False):
-    global RUNNER
-    global DATA_SIZE
-    global DATA_INDEX
-    global MODEL_TRAIN_SIZE
+    global RUNNER, TEST_DATABLOCK, DATA_SIZE, DATA_INDEX, MODEL_TRAIN_SIZE
+
+    test_datablock_dict = {
+        'pi01': TEST_DATABLOCK}
 
     if not RUNNER:
-        RUNNER = person_classifier.get_model_runner()
+        RUNNER = person_classifier.get_model_runner(test_data=test_datablock_dict)
     if reconstruct:
         state_dictionary = reconstruct_model()
         RUNNER.model.load_state_dictionary(state_dictionary)
@@ -150,23 +153,17 @@ def send_images():
 
 def setup_data():
     global DATABLOCK, DATA_INDEX, TOTAL_DATA_COUNT
+
     data = pickle.load(open('./data/federated-learning-data.pkl', 'rb'))
-    images_in_cluster = get_images_for_cluster(data, CLUSTER_TOPIC)
-    print("# of Images in Cluster: ", len(images_in_cluster))
-    TOTAL_DATA_COUNT = len(images_in_cluster)
+    num_images = len(data)
+    split_index = int(num_images * 4 / 5)   # 20% for testing
+    train_data = data[0:split_index]
+    test_data = data[split_index:]
 
-    for image, attributes in images_in_cluster:
-        label = 0
-        if "person" in attributes:
-            label = 1
-        elif "no-person" in attributes:
-            label = 0
-        else:
-            print("SOMETHING IS BROKEN WITH DATA LABELING")
-        DATABLOCK.init_new_image(image.shape, label)
-        DATABLOCK.image_data[-1] = image
+    DATABLOCK.add_images_for_cluster(train_data, CLUSTER_TOPIC)
+    TEST_DATABLOCK.add_images_for_cluster(test_data, CLUSTER_TOPIC)
 
-    DATABLOCK.shuffle_data()
+    TOTAL_DATA_COUNT = DATABLOCK.num_images
 
 
 def send_model(statedict):
@@ -318,7 +315,7 @@ client = mqtt.Client(client_id=PI_ID)
 client.on_connect = on_connect
 client.on_message = on_message
 client.on_log = on_log
-client.connect("broker.hivemq.com", 1883, 65534)
+client.connect("localhost", 1883, 65534)
 
 # Blocking call that processes network traffic, dispatches callbacks and
 # handles reconnecting.

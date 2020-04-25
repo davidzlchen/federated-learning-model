@@ -98,9 +98,15 @@ def test(client_data):
     return runner.test_model()
 
 
-def get_model_runner(client_data=get_test_data(), num_epochs=EPOCHS):
-    people_data_loader = load_data(client_data)
-    test_data_loader = load_data(get_test_data())
+def get_model_runner(client_data=None, test_data=None, num_epochs=EPOCHS):
+    people_data_loader = None
+    test_data_loader = None
+
+    if client_data is not None:
+        people_data_loader = load_data(client_data)
+    if test_data is not None:
+        test_data_loader = load_data(test_data)
+
     runner = initialize_runner(
         people_data_loader,
         test_data_loader,
