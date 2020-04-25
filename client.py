@@ -26,6 +26,8 @@ MODEL_TRAIN_SIZE = 24
 RUNNER = None
 CONFIGURATION = Configuration()
 TOTAL_DATA_COUNT = 0
+DATA_PARTITION_INDEX = 0
+NUM_DATA_PARTITIONS = 0
 
 PI_ID = 'pi{}'.format(uuid.uuid4())
 DEVICE_TOPIC = 'client/{}'.format(PI_ID)
@@ -152,10 +154,15 @@ def setup_data():
     global DATABLOCK, DATA_INDEX, TOTAL_DATA_COUNT
     data = pickle.load(open('./data/federated-learning-data.pkl', 'rb'))
     images_in_cluster = get_images_for_cluster(data, CLUSTER_TOPIC)
-    print("# of Images in Cluster: ", len(images_in_cluster))
-    TOTAL_DATA_COUNT = len(images_in_cluster)
+    images_per_partition = len(images_in_cluster)/NUM_DATA_PARTITIONS
+    start = DATA_PARTITION_INDEX*images_per_partition
+    end = DATA_PARTITION_INDEX*images_per_partition + images_per_partition
+    images_in_cluster_partition = images_in_cluster[start:end]
 
-    for image, attributes in images_in_cluster:
+    print("# of Images in Cluster Partition: ", len(images_in_cluster_partition))
+    TOTAL_DATA_COUNT = len(images_in_cluster_partition)
+
+    for image, attributes in images_in_cluster_partition:
         label = 0
         if "person" in attributes:
             label = 1
@@ -220,7 +227,7 @@ def on_log(client, userdata, level, buf):
 
 
 def on_message(client, userdata, msg):
-    global CLUSTER_TOPIC
+    global CLUSTER_TOPIC, NUM_DATA_PARTITIONS, DATA_PARTITION_INDEX
 
     payload = json.loads(msg.payload.decode())
     message_type = payload["message"]
@@ -254,6 +261,9 @@ def on_message(client, userdata, msg):
         if CLUSTER_TOPIC is not None:
             client.unsubscribe(CLUSTER_TOPIC)
         CLUSTER_TOPIC = payload[constants.CLUSTER_TOPIC_NAME]
+
+        NUM_DATA_PARTITIONS = payload['num_clients_in_cluster']
+        DATA_PARTITION_INDEX = payload['client_index_in_cluster']
 
         print("New cluster topic: {}".format(CLUSTER_TOPIC))
         client.subscribe(CLUSTER_TOPIC)
