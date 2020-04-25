@@ -67,10 +67,17 @@ class Datablock(object):
         self.dimensions = []
         self.labels = []
 
-    # Used to add images for a cluster from preprocessed .pkl data
-    def add_images_for_cluster(self, images, cluster_topic):
+    # Used to add images for a cluster or cluster partition from preprocessed .pkl data
+    def add_images_for_cluster(self, images, cluster_topic, partition=False, partition_index=0, num_partitions=1):
         images_in_cluster = get_images_for_cluster(images, cluster_topic)
-        print("# of Images in Cluster: ", len(images_in_cluster))
+        if(partition):
+            images_per_partition = len(images_in_cluster) / num_partitions
+            start = partition_index * images_per_partition
+            end = partition_index * images_per_partition + images_per_partition
+            images_in_cluster = images_in_cluster[start:end]
+            print("# of Images in Cluster Partition: ", len(images_in_cluster))
+        else:
+            print("# of Images in Cluster: ", len(images_in_cluster))
 
         for image, attributes in images_in_cluster:
             label = 0

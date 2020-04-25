@@ -26,6 +26,8 @@ MODEL_TRAIN_SIZE = 24
 RUNNER = None
 CONFIGURATION = Configuration()
 TOTAL_DATA_COUNT = 0
+DATA_PARTITION_INDEX = 0
+NUM_DATA_PARTITIONS = 0
 
 PI_ID = 'pi{}'.format(uuid.uuid4())
 DEVICE_TOPIC = 'client/{}'.format(PI_ID)
@@ -160,7 +162,7 @@ def setup_data():
     train_data = data[0:split_index]
     test_data = data[split_index:]
 
-    DATABLOCK.add_images_for_cluster(train_data, CLUSTER_TOPIC)
+    DATABLOCK.add_images_for_cluster(train_data, CLUSTER_TOPIC, partition=True, partition_index=DATA_PARTITION_INDEX, num_partitions=NUM_DATA_PARTITIONS)
     TEST_DATABLOCK.add_images_for_cluster(test_data, CLUSTER_TOPIC)
 
     TOTAL_DATA_COUNT = DATABLOCK.num_images
@@ -217,7 +219,7 @@ def on_log(client, userdata, level, buf):
 
 
 def on_message(client, userdata, msg):
-    global CLUSTER_TOPIC
+    global CLUSTER_TOPIC, NUM_DATA_PARTITIONS, DATA_PARTITION_INDEX
 
     payload = json.loads(msg.payload.decode())
     message_type = payload["message"]
@@ -251,6 +253,9 @@ def on_message(client, userdata, msg):
         if CLUSTER_TOPIC is not None:
             client.unsubscribe(CLUSTER_TOPIC)
         CLUSTER_TOPIC = payload[constants.CLUSTER_TOPIC_NAME]
+
+        NUM_DATA_PARTITIONS = payload['num_clients_in_cluster']
+        DATA_PARTITION_INDEX = payload['client_index_in_cluster']
 
         print("New cluster topic: {}".format(CLUSTER_TOPIC))
         client.subscribe(CLUSTER_TOPIC)
@@ -315,6 +320,7 @@ client = mqtt.Client(client_id=PI_ID)
 client.on_connect = on_connect
 client.on_message = on_message
 client.on_log = on_log
+#client.connect("broker.hivemq.com", 1883, 65534)
 client.connect("localhost", 1883, 65534)
 
 # Blocking call that processes network traffic, dispatches callbacks and
