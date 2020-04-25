@@ -28,7 +28,7 @@ import datetime
 sys.path.append('.')
 
 app = Flask(__name__)
-app.config['MQTT_BROKER_URL'] = 'broker.hivemq.com'
+app.config['MQTT_BROKER_URL'] = 'localhost'
 app.config['MQTT_BROKER_PORT'] = 1883
 app.config['MQTT_KEEPALIVE'] = 1000
 app.config['MQTT_REFRESH_TIME'] = 1.0  # refresh time in seconds
