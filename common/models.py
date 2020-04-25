@@ -107,8 +107,6 @@ class ModelRunner(object):
     def test_model(self):
         self.model.eval()
 
-        print("Epoch 1/1")
-        print("-" * 10)
 
         running_loss = 0.0
         running_corrects = 0
@@ -133,5 +131,5 @@ class ModelRunner(object):
         print('Test Loss: {:.4f} Acc: {:.4f}'.format(
             epoch_loss, epoch_acc))
 
-        res_data = ResultData(epoch_loss, epoch_acc)
+        res_data = ResultData(test_loss = epoch_loss, model_accuracy = epoch_acc)
         return res_data

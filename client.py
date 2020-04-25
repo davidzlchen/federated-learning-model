@@ -3,6 +3,8 @@ import time
 import json
 import numpy as np
 import uuid
+import sys
+import platform
 
 import paho.mqtt.client as mqtt
 from common import person_classifier
@@ -15,7 +17,7 @@ from common.configuration import *
 import traceback
 
 NETWORK_STRING = ''
-DEFAULT_BATCH_SIZE = 15
+DATA_SIZE = 0
 
 DATABLOCK = Datablock()
 TEST_DATABLOCK = Datablock()
@@ -23,7 +25,7 @@ DATA_INDEX = 0
 MODEL_TRAIN_SIZE = 24
 RUNNER = None
 CONFIGURATION = Configuration()
-TOTAL_DATA_COUNT = 240
+TOTAL_DATA_COUNT = 0
 
 PI_ID = 'pi{}'.format(uuid.uuid4())
 DEVICE_TOPIC = 'client/{}'.format(PI_ID)
@@ -83,18 +85,22 @@ def reconstruct_model():
 
 
 def test(reconstruct=False):
-    global RUNNER, TEST_DATABLOCK
+    global RUNNER, TEST_DATABLOCK, DATA_SIZE, DATA_INDEX, MODEL_TRAIN_SIZE
 
-    datablock_dict = {
+    test_datablock_dict = {
         'pi01': TEST_DATABLOCK}
 
     if not RUNNER:
-        RUNNER = person_classifier.get_model_runner(test_data=datablock_dict)
+        RUNNER = person_classifier.get_model_runner(test_data=test_datablock_dict)
     if reconstruct:
         state_dictionary = reconstruct_model()
         RUNNER.model.load_state_dictionary(state_dictionary)
 
     ResultData = RUNNER.test_model()
+    ResultData.size += DATA_SIZE
+    ResultData.specs = platform.uname()
+    ResultData.iteration = DATA_INDEX/MODEL_TRAIN_SIZE
+    ResultData.epochs = RUNNER.epochs
     send_typed_message(
         client,
         DEVICE_TOPIC,
@@ -108,7 +114,7 @@ def test(reconstruct=False):
 
 def publish_encoded_image(image, label):
     sample = (image, label)
-    send_typed_message(client, DEVICE_TOPIC, sample, MessageType.IMAGE_CHUNK)
+    return send_typed_message(client, DEVICE_TOPIC, sample, MessageType.IMAGE_CHUNK)
 
 
 def publish_encoded_model(payload):
@@ -120,19 +126,20 @@ def publish_encoded_model(payload):
 
 
 def send_images():
-    global DATABLOCK, DATA_INDEX
+    global DATABLOCK, DATA_INDEX, DATA_SIZE
 
-    for i in range(DATA_INDEX, DATA_INDEX + DEFAULT_BATCH_SIZE):
+    for i in range(DATA_INDEX, DATA_INDEX + MODEL_TRAIN_SIZE):
         image = DATABLOCK.image_data[i]
         label = DATABLOCK.labels[i]
-        publish_encoded_image(image, label)
+        DATA_SIZE += publish_encoded_image(image, label)
     print(
         "images {} to {} sent".format(
             DATA_INDEX,
             DATA_INDEX +
-            DEFAULT_BATCH_SIZE -
+            MODEL_TRAIN_SIZE -
             1))
-    DATA_INDEX += DEFAULT_BATCH_SIZE
+    DATA_INDEX += MODEL_TRAIN_SIZE
+
 
     end_msg = {
         'message': 'all_images_sent'
@@ -145,7 +152,7 @@ def send_images():
 
 
 def setup_data():
-    global DATABLOCK, DATA_INDEX
+    global DATABLOCK, DATA_INDEX, TOTAL_DATA_COUNT
 
     data = pickle.load(open('./data/federated-learning-data.pkl', 'rb'))
     num_images = len(data)
@@ -156,16 +163,20 @@ def setup_data():
     DATABLOCK.add_images_for_cluster(train_data, CLUSTER_TOPIC)
     TEST_DATABLOCK.add_images_for_cluster(test_data, CLUSTER_TOPIC)
 
+    TOTAL_DATA_COUNT = DATABLOCK.num_images
+
 
 def send_model(statedict):
+    global DATA_SIZE
     train(statedict)
+    state_dict = RUNNER.model.get_state_dictionary()
+    binary_state_dict = encode_state_dictionary(state_dict)
+    DATA_SIZE = int(sys.getsizeof(binary_state_dict))
+    print(DATA_SIZE)
     test()
 
     print("Finished testing model.")
 
-    state_dict = RUNNER.model.get_state_dictionary()
-
-    binary_state_dict = encode_state_dictionary(state_dict)
     publish_encoded_model(binary_state_dict)
 
     print('State dictionary sent to central server!')
@@ -271,7 +282,7 @@ def process_network_data(client, message_type, payload):
             else:
                 send_model(state_dict)
         elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
-            if DATA_INDEX + DEFAULT_BATCH_SIZE > TOTAL_DATA_COUNT:
+            if DATA_INDEX + MODEL_TRAIN_SIZE > TOTAL_DATA_COUNT:
                 test(True)
                 send_typed_message(client, DEVICE_TOPIC, json.dumps(constants.DEFAULT_ITERATION_END_MESSAGE), MessageType.SIMPLE)
                 print("client is finished")
@@ -283,7 +294,7 @@ def process_network_data(client, message_type, payload):
 
 
 def reset_client():
-    global CONFIGURATION, CLUSTER_TOPIC, NETWORK_STRING, DATABLOCK, DATA_INDEX, RUNNER
+    global CONFIGURATION, CLUSTER_TOPIC, NETWORK_STRING, DATABLOCK, DATA_INDEX, RUNNER, DATA_SIZE
 
     CONFIGURATION.learning_type = LearningType.NONE
     CLUSTER_TOPIC = None
@@ -292,6 +303,7 @@ def reset_client():
     DATABLOCK = Datablock()
     DATA_INDEX = 0
 
+    DATA_SIZE = 0
     RUNNER = None
 
 
@@ -303,7 +315,7 @@ client = mqtt.Client(client_id=PI_ID)
 client.on_connect = on_connect
 client.on_message = on_message
 client.on_log = on_log
-client.connect("localhost", 1883, 65534)
+client.connect("broker.hivemq.com", 1883, 65534)
 
 # Blocking call that processes network traffic, dispatches callbacks and
 # handles reconnecting.
