@@ -100,7 +100,7 @@ def test(reconstruct=False):
         RUNNER.model.load_state_dictionary(state_dictionary)
 
     ResultData = RUNNER.test_model()
-    ResultData.size += DATA_SIZE
+    ResultData.size = DATA_SIZE
     ResultData.specs = platform.uname()
     ResultData.iteration = DATA_INDEX/MODEL_TRAIN_SIZE
     ResultData.epochs = RUNNER.epochs
