@@ -68,7 +68,7 @@ def get_runs():
 def test():
     num_clients = 2
     clusters = {
-        'ground': LearningType.CENTRALIZED
+        'ground': LearningType.FEDERATED
     }
 
     initialize_server(clusters, num_clients)
@@ -222,7 +222,7 @@ def initialize_server(required_clusters, num_clients):
 
 def generate_test_datablocks(clusters):
     global TEST_DATABLOCKS
-    data = pickle.load(open('./data/federated-learning-data.pkl', 'rb'))
+    data = pickle.load(open('./data/federated-learning-data-1000.pkl', 'rb'))
     num_images = len(data)
     split_index = int(num_images * 4 / 5)  # 20% for testing
     test_data = data[split_index:]
