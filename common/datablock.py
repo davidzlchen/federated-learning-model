@@ -70,6 +70,8 @@ class Datablock(object):
     # Used to add images for a cluster or cluster partition from preprocessed .pkl data
     def add_images_for_cluster(self, images, cluster_topic, partition=False, partition_index=0, num_partitions=1):
         images_in_cluster = get_images_for_cluster(images, cluster_topic)
+        random.shuffle(images_in_cluster)
+
         if(partition):
             images_per_partition = int(len(images_in_cluster) / num_partitions)
             start = partition_index * images_per_partition
@@ -90,4 +92,4 @@ class Datablock(object):
             self.init_new_image(image.shape, label)
             self.image_data[-1] = image
 
-        self.shuffle_data()
+        #self.shuffle_data()
