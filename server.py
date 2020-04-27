@@ -364,14 +364,14 @@ def receive_result_data(client_id, data):
     # print(data)  # buried under mountain of tensor prints
     result_data_object = as_result_data(data)
 
-    # conn = sqlite3.connect("runs.db")
-    # cursor = conn.cursor()
-    #
-    # data = (RUN_ID, datetime.datetime.utcnow().isoformat(), client_id, result_data_object.specs, CLIENTS[client_id].get_learning_type().name, result_data_object.model_accuracy, result_data_object.test_loss, result_data_object.epochs, result_data_object.iteration)
-    # cursor.execute("""INSERT INTO runs(RunID, UTCDateTime, ClientID, ClientHardware, LearningType, ModelAccuracy, TestLoss, NumEpochs, Iteration) VALUES(?,?,?,?,?,?,?,?,?)""", data);
-    # conn.commit()
-    #
-    # conn.close()
+    conn = sqlite3.connect("runs.db")
+    cursor = conn.cursor()
+
+    data = (RUN_ID, datetime.datetime.utcnow().isoformat(), client_id, result_data_object.specs, CLIENTS[client_id].get_learning_type().name, result_data_object.model_accuracy, result_data_object.test_loss, result_data_object.epochs, result_data_object.iteration)
+    cursor.execute("""INSERT INTO runs(RunID, UTCDateTime, ClientID, ClientHardware, LearningType, ModelAccuracy, TestLoss, NumEpochs, Iteration) VALUES(?,?,?,?,?,?,?,?,?)""", data);
+    conn.commit()
+
+    conn.close()
 
     print(
         "{}: Test Loss: {}".format(
