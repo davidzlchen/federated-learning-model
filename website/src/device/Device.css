@@ -1,0 +1,6 @@
+.container {
+    display: flex;
+    .child {
+        margin: 20px;
+    }
+}

@@ -3,6 +3,7 @@ import pickle
 import sys
 import traceback
 import random
+import uuid
 
 from flask import Flask, request, jsonify
 from flask_socketio import SocketIO
@@ -50,7 +51,8 @@ NETWORK = None
 TEST_DATABLOCKS = dict()
 CENTRALIZED_EPOCHS = 5
 RUN_ID = None
-CLUSTER_NAMES = ["water", "ground", "solid", "sky", "plant", "structural", "building", "food-stuff", "textile", "furniture-stuff", "window", "floor", "ceiling", "wall", "raw-material"]
+#CLUSTER_NAMES = ["water", "ground", "solid", "sky", "plant", "structural", "building", "food-stuff", "textile", "furniture-stuff", "window", "floor", "ceiling", "wall", "raw-material"]
+CLUSTER_NAMES = ["water", "ground"]
 
 
 @app.route('/getAllRuns', methods=['GET'])
@@ -92,19 +94,15 @@ def execute_run():
         num_clients = int(body.get('numDevices', 2))
         num_clusters = int(body.get('numClusters', 1))
         operation_modes = [LearningType(int(body.get('operationMode', 0)))] * num_clients
-
         chosen_cluster = random.sample(CLUSTER_NAMES, num_clusters)
-
         clusters = dict(zip(chosen_cluster, operation_modes))
 
         print(clusters)
 
-        initialize_server(clusters, num_clients)
-
+        assignments = initialize_server(clusters, num_clients)
         send_typed_message(mqtt, 'server/general', constants.START_LEARNING_MESSAGE, MessageType.SIMPLE)
 
-
-    return "server initialized and run started"
+        return json.dumps({'run_id': str(uuid.uuid4()), 'assignments': assignments})
 
 
 @app.route('/', methods=['POST'])
@@ -119,7 +117,7 @@ def index():
             "ground": operation_mode,
             #"outdoor": operation_mode
         }
-        initialize_server(clusters, num_clients)
+        assignments = initialize_server(clusters, num_clients)
 
         send_typed_message(
             mqtt,
@@ -127,7 +125,7 @@ def index():
             constants.START_LEARNING_MESSAGE,
             MessageType.SIMPLE)
 
-        return "server initialized and message sent"
+        return json.dumps({'run_id': str(uuid.uuid4()), 'assignments': assignments})
 
 
 @socketio.on('connect')
@@ -154,7 +152,6 @@ def handle_mqtt_message(client, userdata, msg):
 
     # Add a new client and subscribe to appropriate topic
     if msg.topic == constants.NEW_CLIENT_INITIALIZATION_TOPIC:
-
         initialize_new_clients(message)
         return
 
@@ -206,6 +203,7 @@ def initialize_server(required_clusters, num_clients):
 
     generate_test_datablocks(required_clusters)
 
+    assignments = []
     for cluster_name in required_clusters:
         free_clients = get_free_clients(clients_per_cluster)
         CLUSTERS[cluster_name] = ClusterBlock(
@@ -229,9 +227,18 @@ def initialize_server(required_clusters, num_clients):
         # send msg to those clients saying this your cluster (for subscription)
         client_index = 0
         for client_id in free_clients:
+            topic = CLUSTERS[cluster_name].get_mqtt_topic_name()
+
+            assignment = {
+                'device': client_id,
+                'topic': topic,
+                'learning_type': learning_type
+            }
+            assignments.append(assignment)
+
             message = {
                 'message': constants.SUBSCRIBE_TO_CLUSTER,
-                constants.CLUSTER_TOPIC_NAME: CLUSTERS[cluster_name].get_mqtt_topic_name(),
+                constants.CLUSTER_TOPIC_NAME: topic,
                 'learning_type': learning_type,
                 'client_id': client_id,
                 'num_clients_in_cluster': len(free_clients),
@@ -244,6 +251,7 @@ def initialize_server(required_clusters, num_clients):
                 MessageType.SIMPLE)
 
             client_index += 1
+    return assignments
 
 
 def generate_test_datablocks(clusters):
@@ -387,16 +395,15 @@ def perform_hybrid_learning():
 
 
 def receive_result_data(client_id, data):
-    # print(data)  # buried under mountain of tensor prints
     result_data_object = as_result_data(data)
+    print(result_data_object)
+    socketio.emit(client_id, json.dumps(data))
 
     conn = sqlite3.connect("runs.db")
     cursor = conn.cursor()
-
     data = (RUN_ID, datetime.datetime.utcnow().isoformat(), client_id, result_data_object.specs, CLIENTS[client_id].get_learning_type().name, result_data_object.model_accuracy, result_data_object.test_loss, result_data_object.epochs, result_data_object.iteration)
     cursor.execute("""INSERT INTO runs(RunID, UTCDateTime, ClientID, ClientHardware, LearningType, ModelAccuracy, TestLoss, NumEpochs, Iteration) VALUES(?,?,?,?,?,?,?,?,?)""", data);
     conn.commit()
-
     conn.close()
 
     print(

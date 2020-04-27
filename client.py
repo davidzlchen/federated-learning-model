@@ -35,6 +35,8 @@ DEVICE_TOPIC = 'client/{}'.format(PI_ID)
 
 CLUSTER_TOPIC = None
 
+print('device: ' + PI_ID)
+
 
 ########################################
 # personalized model
@@ -50,7 +52,7 @@ def personalized():
 
 ########################################
 # model stuff
-########################################
+#
 
 
 def train(statedict):
