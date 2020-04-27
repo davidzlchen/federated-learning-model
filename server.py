@@ -2,6 +2,7 @@ import json
 import pickle
 import sys
 import traceback
+import random
 
 from flask import Flask, request, jsonify
 from flask_socketio import SocketIO
@@ -49,6 +50,7 @@ NETWORK = None
 TEST_DATABLOCKS = dict()
 CENTRALIZED_EPOCHS = 5
 RUN_ID = None
+CLUSTER_NAMES = ["water", "ground", "solid", "sky", "plant", "structural", "building", "food-stuff", "textile", "furniture-stuff", "window", "floor", "ceiling", "wall", "raw-material"]
 
 
 @app.route('/getAllRuns', methods=['GET'])
@@ -79,6 +81,30 @@ def test():
         MessageType.SIMPLE)
 
     return 'TEST - server initialized and msg sent'
+
+
+@app.route('/executeRun', methods=['POST'])
+def execute_run():
+    global CLUSTER_NAMES
+    if request.method == 'POST':
+        body = request.get_json()
+
+        num_clients = int(body.get('numDevices', 2))
+        num_clusters = int(body.get('numClusters', 1))
+        operation_modes = [LearningType(int(body.get('operationMode', 0)))] * num_clients
+
+        chosen_cluster = random.sample(CLUSTER_NAMES, num_clusters)
+
+        clusters = dict(zip(chosen_cluster, operation_modes))
+
+        print(clusters)
+
+        initialize_server(clusters, num_clients)
+
+        send_typed_message(mqtt, 'server/general', constants.START_LEARNING_MESSAGE, MessageType.SIMPLE)
+
+
+    return "server initialized and run started"
 
 
 @app.route('/', methods=['POST'])
