@@ -156,7 +156,7 @@ def send_images():
 def setup_data():
     global DATABLOCK, DATA_INDEX, TOTAL_DATA_COUNT
 
-    data = pickle.load(open('./data/federated-learning-data-1000.pkl', 'rb'))
+    data = pickle.load(open('./data/federated-learning-data.pkl', 'rb'))
     num_images = len(data)
     split_index = int(num_images * 4 / 5)   # 20% for testing
     train_data = data[0:split_index]
