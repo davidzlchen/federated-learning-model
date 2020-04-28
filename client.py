@@ -101,6 +101,7 @@ def test(reconstruct=False):
 
     ResultData = RUNNER.test_model()
     ResultData.size = DATA_SIZE
+    DATA_SIZE=0
     ResultData.specs = platform.uname()
     ResultData.iteration = DATA_INDEX/MODEL_TRAIN_SIZE
     ResultData.epochs = RUNNER.epochs
