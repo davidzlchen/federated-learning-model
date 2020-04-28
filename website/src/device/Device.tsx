@@ -20,10 +20,19 @@ type DeviceProps = {
 };
 
 type DeviceState = {
+  bytes_sent: number;
   test_accuracies: Array<LineSeriesPoint>;
   test_losses: Array<LineSeriesPoint>;
-  bytes_sent: number;
-  system_info: string;
+  system_info: SystemInfo | undefined;
+};
+
+type SystemInfo = {
+  version: string;
+  release: string;
+  node: string;
+  system: string;
+  machine: string;
+  processor: string;
 };
 
 class Device extends Component<DeviceProps, DeviceState> {
@@ -47,7 +56,7 @@ class Device extends Component<DeviceProps, DeviceState> {
       test_accuracies: [],
       test_losses: [],
       bytes_sent: 0,
-      system_info: "",
+      system_info: undefined,
     };
   }
 
@@ -70,7 +79,15 @@ class Device extends Component<DeviceProps, DeviceState> {
           y: parseFloat(data["test_loss"]),
         };
         const bytes_sent = parseInt(data["size"]);
-        const system_info = data["specs"];
+        const { system, node, release, version, machine, processor } = data;
+        const system_info = {
+          system,
+          node,
+          release,
+          version,
+          machine,
+          processor,
+        };
         return {
           test_accuracies: [...prevState.test_accuracies, test_accuracy],
           test_losses: [...prevState.test_losses, test_loss],
@@ -124,7 +141,15 @@ class Device extends Component<DeviceProps, DeviceState> {
                     {bytes_sent}
                   </Descriptions.Item>
                   <Descriptions.Item label="System Info">
-                    {system_info}
+                    Node: {system_info?.node}
+                    <br />
+                    Version: {system_info?.version}
+                    <br />
+                    Release: {system_info?.release}
+                    <br />
+                    Machine: {system_info?.machine}
+                    <br />
+                    Processor: {system_info?.processor}
                   </Descriptions.Item>
                 </Descriptions>
               </Col>
