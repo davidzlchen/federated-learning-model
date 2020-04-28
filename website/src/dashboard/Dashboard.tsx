@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, SetStateAction, Dispatch } from "react";
 import { useHistory } from "react-router-dom";
 import "./Dashboard.css";
 
@@ -16,20 +16,30 @@ import Typography from "antd/es/typography";
 const { Title } = Typography;
 const { Footer, Content } = Layout;
 
-function Dashboard() {
+interface Props {
+  assignmentsByRunId: { [key: string]: any };
+  setAssignmentsByRunId: Dispatch<SetStateAction<{}>>;
+}
+
+function Dashboard({ assignmentsByRunId, setAssignmentsByRunId }: Props) {
   let history = useHistory();
 
   const onFinish = (values: Store) => {
-    fetch("http://localhost:5000", {
+    fetch("http://192.168.1.26:5000/executeRun", {
       method: "POST",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
       },
       body: JSON.stringify(values),
-    }).then((value) => {
-      history.push("/runs/abc");
-    });
+    })
+      .then((response) => response.json())
+      .then((response) => {
+        console.log(response);
+        const { run_id: runId, assignments } = response;
+        setAssignmentsByRunId({ ...assignmentsByRunId, [runId]: assignments });
+        history.push("/runs/" + runId);
+      });
   };
 
   const [clusterMode, setClusterMode] = useState(false);
@@ -41,12 +51,16 @@ function Dashboard() {
   return (
     <Layout className="site-layout">
       <Content style={{ margin: "16px 16px" }}>
-        <Form name="form" onFinish={onFinish}>
+        <Form
+          name="form"
+          initialValues={{ numDevices: 1, operationMode: 0, numClusters: 1 }}
+          onFinish={onFinish}
+        >
           <Card>
             <Title>Federated Machine Learning Demo</Title>
             <Divider />
             <Form.Item label="Number of devices" name="numDevices">
-              <InputNumber min={1} max={3} />
+              <InputNumber min={1} max={6} />
             </Form.Item>
             <Form.Item label="Operation mode" name="operationMode">
               <Radio.Group>
@@ -63,6 +77,7 @@ function Dashboard() {
               <Switch onChange={(e) => setClusterMode(e)} />
             </Form.Item>
             {clusterMode && numClusters}
+            {/* 
             <Divider />
             <Form.Item label="Maximum update size (in MB)" name="updateSize">
               <InputNumber min={1} />
@@ -80,6 +95,7 @@ function Dashboard() {
                 <Radio value={2}>Sketched</Radio>
               </Radio.Group>
             </Form.Item>
+             */}
             <Form.Item>
               <Button type="primary" htmlType="submit">
                 Submit

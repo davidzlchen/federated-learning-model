@@ -35,6 +35,8 @@ DEVICE_TOPIC = 'client/{}'.format(PI_ID)
 
 CLUSTER_TOPIC = None
 
+print('device: ' + PI_ID)
+
 
 ########################################
 # personalized model
@@ -50,7 +52,7 @@ def personalized():
 
 ########################################
 # model stuff
-########################################
+#
 
 
 def train(statedict):
@@ -63,7 +65,8 @@ def train(statedict):
     test_datablock_dict = {
         'pi01': TEST_DATABLOCK}
 
-    RUNNER = person_classifier.get_model_runner(client_data=datablock_dict, test_data=test_datablock_dict)
+    RUNNER = person_classifier.get_model_runner(
+        client_data=datablock_dict, test_data=test_datablock_dict)
 
     if DATA_INDEX != 0:
         RUNNER.model.load_state_dictionary(statedict)
@@ -94,16 +97,22 @@ def test(reconstruct=False):
         'pi01': TEST_DATABLOCK}
 
     if not RUNNER:
-        RUNNER = person_classifier.get_model_runner(test_data=test_datablock_dict)
+        RUNNER = person_classifier.get_model_runner(
+            test_data=test_datablock_dict)
     if reconstruct:
         state_dictionary = reconstruct_model()
         RUNNER.model.load_state_dictionary(state_dictionary)
 
     ResultData = RUNNER.test_model()
     ResultData.size = DATA_SIZE
-    DATA_SIZE=0
-    ResultData.specs = platform.uname()
-    ResultData.iteration = DATA_INDEX/MODEL_TRAIN_SIZE
+    DATA_SIZE = 0
+    ResultData.system = platform.system()
+    ResultData.node = platform.node()
+    ResultData.release = platform.release()
+    ResultData.version = platform.version()
+    ResultData.machine = platform.machine()
+    ResultData.processor = platform.processor()
+    ResultData.iteration = DATA_INDEX / MODEL_TRAIN_SIZE
     ResultData.epochs = RUNNER.epochs
     send_typed_message(
         client,
@@ -118,7 +127,11 @@ def test(reconstruct=False):
 
 def publish_encoded_image(image, label):
     sample = (image, label)
-    return send_typed_message(client, DEVICE_TOPIC, sample, MessageType.IMAGE_CHUNK)
+    return send_typed_message(
+        client,
+        DEVICE_TOPIC,
+        sample,
+        MessageType.IMAGE_CHUNK)
 
 
 def publish_encoded_model(payload):
@@ -144,7 +157,6 @@ def send_images():
             1))
     DATA_INDEX += MODEL_TRAIN_SIZE
 
-
     end_msg = {
         'message': 'all_images_sent'
     }
@@ -164,7 +176,12 @@ def setup_data():
     train_data = data[0:split_index]
     test_data = data[split_index:]
 
-    DATABLOCK.add_images_for_cluster(train_data, CLUSTER_TOPIC, partition=True, partition_index=DATA_PARTITION_INDEX, num_partitions=NUM_DATA_PARTITIONS)
+    DATABLOCK.add_images_for_cluster(
+        train_data,
+        CLUSTER_TOPIC,
+        partition=True,
+        partition_index=DATA_PARTITION_INDEX,
+        num_partitions=NUM_DATA_PARTITIONS)
     TEST_DATABLOCK.add_images_for_cluster(test_data, CLUSTER_TOPIC)
 
     TOTAL_DATA_COUNT = DATABLOCK.num_images
@@ -284,14 +301,24 @@ def process_network_data(client, message_type, payload):
         state_dict = decode_state_dictionary(NETWORK_STRING)
         if CONFIGURATION.learning_type == LearningType.FEDERATED:
             if DATA_INDEX + MODEL_TRAIN_SIZE > TOTAL_DATA_COUNT:
-                send_typed_message(client, DEVICE_TOPIC, json.dumps(constants.DEFAULT_ITERATION_END_MESSAGE), MessageType.SIMPLE)
+                send_typed_message(
+                    client,
+                    DEVICE_TOPIC,
+                    json.dumps(
+                        constants.DEFAULT_ITERATION_END_MESSAGE),
+                    MessageType.SIMPLE)
                 print("client is finished")
             else:
                 send_model(state_dict)
         elif CONFIGURATION.learning_type == LearningType.CENTRALIZED:
             if DATA_INDEX + MODEL_TRAIN_SIZE > TOTAL_DATA_COUNT:
                 test(True)
-                send_typed_message(client, DEVICE_TOPIC, json.dumps(constants.DEFAULT_ITERATION_END_MESSAGE), MessageType.SIMPLE)
+                send_typed_message(
+                    client,
+                    DEVICE_TOPIC,
+                    json.dumps(
+                        constants.DEFAULT_ITERATION_END_MESSAGE),
+                    MessageType.SIMPLE)
                 print("client is finished")
             else:
                 test(True)
