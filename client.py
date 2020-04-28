@@ -30,6 +30,7 @@ DATA_PARTITION_INDEX = 0
 NUM_DATA_PARTITIONS = 0
 
 PI_ID = 'pi{}'.format(uuid.uuid4())
+print(PI_ID)
 DEVICE_TOPIC = 'client/{}'.format(PI_ID)
 
 CLUSTER_TOPIC = None
@@ -99,7 +100,8 @@ def test(reconstruct=False):
         RUNNER.model.load_state_dictionary(state_dictionary)
 
     ResultData = RUNNER.test_model()
-    ResultData.size += DATA_SIZE
+    ResultData.size = DATA_SIZE
+    DATA_SIZE=0
     ResultData.specs = platform.uname()
     ResultData.iteration = DATA_INDEX/MODEL_TRAIN_SIZE
     ResultData.epochs = RUNNER.epochs
@@ -320,8 +322,8 @@ client = mqtt.Client(client_id=PI_ID)
 client.on_connect = on_connect
 client.on_message = on_message
 client.on_log = on_log
-#client.connect("broker.hivemq.com", 1883, 65534)
-client.connect("localhost", 1883, 65534)
+client.connect("broker.hivemq.com", 1883, 65534)
+#client.connect("localhost", 1883, 65534)
 
 # Blocking call that processes network traffic, dispatches callbacks and
 # handles reconnecting.
