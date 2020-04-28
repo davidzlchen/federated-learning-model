@@ -3,6 +3,7 @@ import pickle
 import sys
 import traceback
 import random
+import uuid
 
 from flask import Flask, request, jsonify
 from flask_socketio import SocketIO
@@ -50,7 +51,8 @@ NETWORK = None
 TEST_DATABLOCKS = dict()
 CENTRALIZED_EPOCHS = 5
 RUN_ID = None
-CLUSTER_NAMES = ["water", "ground", "solid", "sky", "plant", "structural", "building", "food-stuff", "textile", "furniture-stuff", "window", "floor", "ceiling", "wall", "raw-material"]
+#CLUSTER_NAMES = ["water", "ground", "solid", "sky", "plant", "structural", "building", "food-stuff", "textile", "furniture-stuff", "window", "floor", "ceiling", "wall", "raw-material"]
+CLUSTER_NAMES = ["water", "ground"]
 
 
 @app.route('/getAllRuns', methods=['GET'])
@@ -91,20 +93,22 @@ def execute_run():
 
         num_clients = int(body.get('numDevices', 2))
         num_clusters = int(body.get('numClusters', 1))
-        operation_modes = [LearningType(int(body.get('operationMode', 0)))] * num_clients
-
+        operation_modes = [LearningType(
+            int(body.get('operationMode', 0)))] * num_clients
         chosen_cluster = random.sample(CLUSTER_NAMES, num_clusters)
-
         clusters = dict(zip(chosen_cluster, operation_modes))
 
         print(clusters)
 
-        initialize_server(clusters, num_clients)
+        assignments = initialize_server(clusters, num_clients)
+        send_typed_message(
+            mqtt,
+            'server/general',
+            constants.START_LEARNING_MESSAGE,
+            MessageType.SIMPLE)
 
-        send_typed_message(mqtt, 'server/general', constants.START_LEARNING_MESSAGE, MessageType.SIMPLE)
-
-
-    return "server initialized and run started"
+        return json.dumps({'run_id': str(uuid.uuid4()),
+                           'assignments': assignments})
 
 
 @app.route('/', methods=['POST'])
@@ -117,9 +121,9 @@ def index():
         operation_mode = LearningType(body.get('operationMode', 1))
         clusters = {
             "ground": operation_mode,
-            #"outdoor": operation_mode
+            # "outdoor": operation_mode
         }
-        initialize_server(clusters, num_clients)
+        assignments = initialize_server(clusters, num_clients)
 
         send_typed_message(
             mqtt,
@@ -127,7 +131,8 @@ def index():
             constants.START_LEARNING_MESSAGE,
             MessageType.SIMPLE)
 
-        return "server initialized and message sent"
+        return json.dumps({'run_id': str(uuid.uuid4()),
+                           'assignments': assignments})
 
 
 @socketio.on('connect')
@@ -154,7 +159,6 @@ def handle_mqtt_message(client, userdata, msg):
 
     # Add a new client and subscribe to appropriate topic
     if msg.topic == constants.NEW_CLIENT_INITIALIZATION_TOPIC:
-
         initialize_new_clients(message)
         return
 
@@ -163,7 +167,7 @@ def handle_mqtt_message(client, userdata, msg):
         receive_result_data(client_name, payload['data'])
 
     if message == constants.DEFAULT_ITERATION_END:
-        CLIENTS[client_name].set_state(ClientState.FREE);
+        CLIENTS[client_name].set_state(ClientState.FREE)
 
     if client_name in CLIENTS:
         if CLIENTS[client_name].get_learning_type() == LearningType.FEDERATED:
@@ -206,6 +210,7 @@ def initialize_server(required_clusters, num_clients):
 
     generate_test_datablocks(required_clusters)
 
+    assignments = []
     for cluster_name in required_clusters:
         free_clients = get_free_clients(clients_per_cluster)
         CLUSTERS[cluster_name] = ClusterBlock(
@@ -229,9 +234,18 @@ def initialize_server(required_clusters, num_clients):
         # send msg to those clients saying this your cluster (for subscription)
         client_index = 0
         for client_id in free_clients:
+            topic = CLUSTERS[cluster_name].get_mqtt_topic_name()
+
+            assignment = {
+                'device': client_id,
+                'topic': topic,
+                'learning_type': learning_type
+            }
+            assignments.append(assignment)
+
             message = {
                 'message': constants.SUBSCRIBE_TO_CLUSTER,
-                constants.CLUSTER_TOPIC_NAME: CLUSTERS[cluster_name].get_mqtt_topic_name(),
+                constants.CLUSTER_TOPIC_NAME: topic,
                 'learning_type': learning_type,
                 'client_id': client_id,
                 'num_clients_in_cluster': len(free_clients),
@@ -244,6 +258,7 @@ def initialize_server(required_clusters, num_clients):
                 MessageType.SIMPLE)
 
             client_index += 1
+    return assignments
 
 
 def generate_test_datablocks(clusters):
@@ -255,7 +270,8 @@ def generate_test_datablocks(clusters):
 
     for cluster in clusters:
         TEST_DATABLOCKS[cluster] = Datablock()
-        TEST_DATABLOCKS[cluster].add_images_for_cluster(test_data, "cluster/"+cluster)
+        TEST_DATABLOCKS[cluster].add_images_for_cluster(
+            test_data, "cluster/" + cluster)
 
 
 # grabs [num_required] free clients and sets status of clients to STALE
@@ -323,7 +339,9 @@ def perform_centralized_learning(clients, cluster):
     }
 
     runner = person_classifier.get_model_runner(
-        client_data=applicable_client_datablocks, test_data=test_datablock_dict, num_epochs=CENTRALIZED_EPOCHS)
+        client_data=applicable_client_datablocks,
+        test_data=test_datablock_dict,
+        num_epochs=CENTRALIZED_EPOCHS)
 
     if CLUSTERS[cluster].get_state_dict() is not None:
         runner.model.load_state_dictionary(CLUSTERS[cluster].get_state_dict())
@@ -387,16 +405,29 @@ def perform_hybrid_learning():
 
 
 def receive_result_data(client_id, data):
-    # print(data)  # buried under mountain of tensor prints
     result_data_object = as_result_data(data)
+    socketio.emit(client_id, json.dumps(data))
 
     conn = sqlite3.connect("runs.db")
     cursor = conn.cursor()
-
-    data = (RUN_ID, datetime.datetime.utcnow().isoformat(), client_id, result_data_object.specs, CLIENTS[client_id].get_learning_type().name, result_data_object.model_accuracy, result_data_object.test_loss, result_data_object.epochs, result_data_object.iteration)
-    cursor.execute("""INSERT INTO runs(RunID, UTCDateTime, ClientID, ClientHardware, LearningType, ModelAccuracy, TestLoss, NumEpochs, Iteration) VALUES(?,?,?,?,?,?,?,?,?)""", data);
+    # TODO: Fix ClientHardware to the six destructured specs
+    data = (
+        RUN_ID,
+        datetime.datetime.utcnow().isoformat(),
+        client_id,
+        result_data_object.system,
+        result_data_object.node,
+        result_data_object.release,
+        result_data_object.version,
+        result_data_object.machine,
+        result_data_object.processor,
+        CLIENTS[client_id].get_learning_type().name,
+        result_data_object.model_accuracy,
+        result_data_object.test_loss,
+        result_data_object.epochs,
+        result_data_object.iteration)
+    cursor.execute("""INSERT INTO runs(RunID, UTCDateTime, ClientID, ClientSystem, ClientNode, ClientRelease, ClientVersion, ClientMachine, ClientProcessor, LearningType, ModelAccuracy, TestLoss, NumEpochs, Iteration) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", data)
     conn.commit()
-
     conn.close()
 
     print(
@@ -504,15 +535,12 @@ def initialize_database():
 
     # create table if it doesn't exist
 
-    cursor.execute("""CREATE TABLE IF NOT EXISTS runs(RunID VARCHAR(255), UTCDateTime VARCHAR(255), ClientID VARCHAR(255), ClientHardware TEXT, LearningType VARCHAR(255), ModelAccuracy FLOAT, TestLoss FLOAT, NumEpochs INT, Iteration INT, PRIMARY KEY (RunID, Iteration, ClientID))""")
+    cursor.execute("""CREATE TABLE IF NOT EXISTS runs(RunID VARCHAR(255), UTCDateTime VARCHAR(255), ClientID VARCHAR(255), ClientSystem TEXT, ClientNode TEXT, ClientRelease TEXT, ClientVersion TEXT, ClientMachine TEXT, ClientProcessor TEXT, LearningType VARCHAR(255), ModelAccuracy FLOAT, TestLoss FLOAT, NumEpochs INT, Iteration INT, PRIMARY KEY (RunID, Iteration, ClientID))""")
 
     conn.commit()
     conn.close()
 
 
-
-
 if __name__ == '__main__':
     initialize_database()
     socketio.run(app, port=5000, host='0.0.0.0')
-
