@@ -42,13 +42,28 @@ print('device: ' + PI_ID)
 # personalized model
 ########################################
 
-def personalized():
-    global MODEL_TRAIN_SIZE
+def personalized(client):
+    global MODEL_TRAIN_SIZE, DATA_INDEX
     setup_data()
-    MODEL_TRAIN_SIZE = 240
-    train(None)
-    test()
-    print("Finished testing model.")
+    while (DATA_INDEX + MODEL_TRAIN_SIZE < TOTAL_DATA_COUNT):
+        if(DATA_INDEX == 0):
+            train(None)
+        else:
+            state_dict = RUNNER.model.get_state_dictionary()
+            train(state_dict) #DATA_INDEX incremented in train
+        test()
+        client.loop_write()
+        print("Finished testing model.")
+
+    send_typed_message(
+        client,
+        DEVICE_TOPIC,
+        json.dumps(
+            constants.DEFAULT_ITERATION_END_MESSAGE),
+        MessageType.SIMPLE)
+    print("client is finished")
+
+
 
 ########################################
 # model stuff
@@ -254,7 +269,7 @@ def on_message(client, userdata, msg):
             setup_data()
             send_images()
         elif CONFIGURATION.learning_type == LearningType.PERSONALIZED:
-            personalized()
+            personalized(client)
 
     elif message_type == constants.SUBSCRIBE_TO_CLUSTER:
         # remove current cluster topic and subscribe to new cluster topic

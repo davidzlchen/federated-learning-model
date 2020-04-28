@@ -70,9 +70,9 @@ def get_runs():
 
 @app.route('/test', methods=['GET'])
 def test():
-    num_clients = 2
+    num_clients = 1
     clusters = {
-        'ground': LearningType.CENTRALIZED
+        'ground': LearningType.PERSONALIZED
     }
 
     initialize_server(clusters, num_clients)
