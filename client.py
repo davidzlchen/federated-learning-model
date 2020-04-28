@@ -102,7 +102,12 @@ def test(reconstruct=False):
     ResultData = RUNNER.test_model()
     ResultData.size = DATA_SIZE
     DATA_SIZE=0
-    ResultData.specs = platform.uname()
+    ResultData.system = platform.system()
+    ResultData.node = platform.node()
+    ResultData.release = platform.release()
+    ResultData.version = platform.version()
+    ResultData.machine = platform.machine()
+    ResultData.processor = platform.processor()
     ResultData.iteration = DATA_INDEX/MODEL_TRAIN_SIZE
     ResultData.epochs = RUNNER.epochs
     send_typed_message(
