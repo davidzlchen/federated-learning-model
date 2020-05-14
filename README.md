@@ -13,34 +13,34 @@ Install [mosquitto](https://mosquitto.org/), a MQTT broker.
 Install virtualenv if you don't have it already.
 
 ```bash
-  pip install virtualenv
+pip install virtualenv
 ```
 
 Then create a new virtualenv and switch to it.
 
 ```bash
-  virtualenv ENV
-  source ENV/bin/activate
+virtualenv ENV
+source ENV/bin/activate
 ```
 
 Then install the requirements
 
 ```bash
-  pip install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 ## Running
 
 ### Starting the server
 ```bash
-  source ENV/bin/activate
-  python server.py
+source ENV/bin/activate
+python server.py
 ```
 
 ### Starting clients (add as many clients as you want)
 ```bash
-  source ENV/bin/activate
-  python client.py
+source ENV/bin/activate
+python client.py
 ```
 
 ### Starting a task
@@ -58,8 +58,8 @@ python3 -m autopep8 --in-place --aggressive --aggressive --recursive *.py common
 ### React
 Install dependencies. Make sure you have Node and NPM. Our configuration uses Node v10.16.3 and npm v6.14.4.
 ```bash
-  cd website
-  npm install
+cd website
+npm install
 ```
 
 To make changes, it is recommended to use the live server.
@@ -69,5 +69,5 @@ npm start
 
 After making changes, create a minified compiled version that Flask will serve.
 ```bash
-  npm run build
+npm run build
 ```
