@@ -68,23 +68,6 @@ def get_runs():
     return jsonify(rows)
 
 
-@app.route('/test', methods=['GET'])
-def test():
-    num_clients = 1
-    clusters = {
-        'ground': LearningType.PERSONALIZED
-    }
-
-    initialize_server(clusters, num_clients)
-    send_typed_message(
-        mqtt,
-        'server/general',
-        constants.START_LEARNING_MESSAGE,
-        MessageType.SIMPLE)
-
-    return 'TEST - server initialized and msg sent'
-
-
 @app.route('/executeRun', methods=['POST'])
 def execute_run():
     global CLUSTER_NAMES
@@ -111,7 +94,24 @@ def execute_run():
                            'assignments': assignments})
 
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/test', methods=['GET'])
+def test():
+    num_clients = 2
+    clusters = {
+        'ground': LearningType.CENTRALIZED
+    }
+
+    initialize_server(clusters, num_clients)
+    send_typed_message(
+        mqtt,
+        'server/general',
+        constants.START_LEARNING_MESSAGE,
+        MessageType.SIMPLE)
+
+    return 'TEST - server initialized and msg sent'
+
+
+@app.route('/test2', methods=['GET', 'POST'])
 def index():
     if request.method == 'GET':
         return render_template("index.html")
@@ -196,16 +196,14 @@ def handle_mqtt_message(client, userdata, msg):
             perform_hybrid_learning()
 
 
+# This function resets the server and assigns available clients to a cluster.
+# If there are not enough free clients, the server will assign the rest that is available.
 def initialize_server(required_clusters, num_clients):
     global CLUSTERS, CLIENTS, RUN_ID
 
     reset()
 
     RUN_ID = str(uuid.uuid4())
-
-    if num_clients % len(required_clusters) != 0:
-        raise ValueError(
-            "Number of clients not evenly divisible by number of required cluster.")
 
     clients_per_cluster = num_clients / len(required_clusters)
     print("clients per cluster: {}".format(clients_per_cluster))
@@ -253,6 +251,7 @@ def initialize_server(required_clusters, num_clients):
                 'num_clients_in_cluster': len(free_clients),
                 'client_index_in_cluster': client_index
             }
+
             send_typed_message(
                 mqtt,
                 'server/general',
@@ -260,6 +259,7 @@ def initialize_server(required_clusters, num_clients):
                 MessageType.SIMPLE)
 
             client_index += 1
+
     return assignments
 
 
@@ -276,7 +276,7 @@ def generate_test_datablocks(clusters):
             test_data, "cluster/" + cluster)
 
 
-# grabs [num_required] free clients and sets status of clients to STALE
+# Grabs [num_required] free clients and sets status of clients to STALE
 def get_free_clients(num_required):
     global CLIENTS
 
@@ -290,7 +290,9 @@ def get_free_clients(num_required):
         if len(free_client_ids) == num_required:
             return free_client_ids
 
-    raise RuntimeError('Not enough available clients')
+    print("WARNING: Not enough clients")
+
+    return free_client_ids
 
 
 def reset():
@@ -312,7 +314,8 @@ def reset():
         MessageType.SIMPLE)
 
 
-# takes the clients that need to be aggregated as input and sends the model
+# Takes the clients that need to be aggregated as input and sends the averaged/whatever aggregation scheme model back to
+# clients in the cluster.
 def perform_federated_learning(clients, cluster):
     global CLUSTERS, CLIENTS, CLIENT_NETWORKS
 
@@ -361,6 +364,8 @@ def perform_centralized_learning(clients, cluster):
         CLUSTERS[cluster].get_mqtt_topic_name())
 
 
+# This is incomplete and does not work. This function is supposed to first average the federated model and then
+# train that model with additional centralized data.
 def perform_hybrid_learning():
     global NETWORK, CLIENTS, CLIENT_NETWORKS
 
@@ -442,6 +447,7 @@ def receive_result_data(client_id, data):
             result_data_object.model_accuracy))
 
 
+# Check if any of clusters are complete, meaning all clients in that cluster has their state set to FINISHED.
 def get_completed_clusters():
     finished_clusters = []
 
@@ -457,6 +463,7 @@ def get_completed_clusters():
     return finished_clusters
 
 
+# Method for collecting federated data (adds model chunk to appropriate client)
 def collect_federated_data(data, message, client_id):
     global CLIENT_NETWORKS, CLIENTS
 
@@ -477,6 +484,7 @@ def collect_federated_data(data, message, client_id):
         CLIENTS[client_id].set_state(ClientState.FINISHED)
 
 
+# Method for collecting centralized data. Adds image chunk to appropriate client datablock.
 def collect_centralized_data(data, message, client_name, dimensions, label):
     global CLIENTS
     if message == constants.DEFAULT_IMAGE_INIT:
@@ -489,6 +497,8 @@ def collect_centralized_data(data, message, client_name, dimensions, label):
         CLIENTS[client_name].set_state(ClientState.FINISHED)
         print("All images received from client: {}".format(client_name))
 
+
+# ===== Methods for sending image and model data from server to client ===== #
 
 def initialize_new_clients(client_id):
     print("New client connected: {}".format(client_id))

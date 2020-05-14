@@ -29,13 +29,13 @@ TOTAL_DATA_COUNT = 0
 DATA_PARTITION_INDEX = 0
 NUM_DATA_PARTITIONS = 0
 
-PI_ID = 'pi{}'.format(uuid.uuid4())
+PI_ID = 'client-{}'.format(uuid.uuid4())
 print(PI_ID)
 DEVICE_TOPIC = 'client/{}'.format(PI_ID)
 
 CLUSTER_TOPIC = None
 
-print('device: ' + PI_ID)
+print('device id: ' + PI_ID)
 
 
 ########################################
