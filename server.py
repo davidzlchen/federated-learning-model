@@ -5,7 +5,7 @@ import traceback
 import random
 import uuid
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_socketio import SocketIO
 from flask_mqtt import Mqtt
 from flask_cors import CORS
@@ -111,8 +111,10 @@ def execute_run():
                            'assignments': assignments})
 
 
-@app.route('/', methods=['POST'])
+@app.route('/', methods=['GET', 'POST'])
 def index():
+    if request.method == 'GET':
+        return render_template("index.html")
     if request.method == 'POST':
         body = request.get_json()
         print(body)
