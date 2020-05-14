@@ -67,13 +67,13 @@ def personalized(client):
 
 ########################################
 # model stuff
-#
+########################################
 
 
+# creates a model runner and trains it
 def train(statedict):
     global DATABLOCK, TEST_DATABLOCK, DATA_INDEX, MODEL_TRAIN_SIZE, RUNNER
-    # print("State dict before training: ")
-    # print(statedict)
+
     datablock_dict = {
         'pi01': DATABLOCK[DATA_INDEX:DATA_INDEX + MODEL_TRAIN_SIZE]}
 
@@ -97,14 +97,15 @@ def train(statedict):
     RUNNER.train_model()
     print("Successfully trained model.")
 
-
+# decodes the given Network string to a usable state dict
 def reconstruct_model():
     global NETWORK_STRING
 
     state_dict = decode_state_dictionary(NETWORK_STRING)
     return state_dict
 
-
+# Tests the model inside a global model runner and reports the result data to the server
+# result data includes: test loss, model accuracy, system specs, size of data sent earlier, iteration number, number of epochs
 def test(reconstruct=False):
     global RUNNER, TEST_DATABLOCK, DATA_SIZE, DATA_INDEX, MODEL_TRAIN_SIZE
 
@@ -139,7 +140,7 @@ def test(reconstruct=False):
 # sending stuff
 ########################################
 
-
+# wrapper to send encoded images
 def publish_encoded_image(image, label):
     sample = (image, label)
     return send_typed_message(
@@ -148,7 +149,7 @@ def publish_encoded_image(image, label):
         sample,
         MessageType.IMAGE_CHUNK)
 
-
+# wrapper to send encoded models 
 def publish_encoded_model(payload):
     send_typed_message(
         client,
@@ -156,7 +157,7 @@ def publish_encoded_model(payload):
         payload,
         MessageType.NETWORK_CHUNK)
 
-
+# sends images [data_index:data_index+data_size] to server
 def send_images():
     global DATABLOCK, DATA_INDEX, DATA_SIZE
 
@@ -181,7 +182,7 @@ def send_images():
         json.dumps(end_msg),
         MessageType.SIMPLE)
 
-
+# sets up the datablock of images needed for future sending of images and training of the model
 def setup_data():
     global DATABLOCK, DATA_INDEX, TOTAL_DATA_COUNT
 
@@ -201,7 +202,7 @@ def setup_data():
 
     TOTAL_DATA_COUNT = DATABLOCK.num_images
 
-
+# sends the trained model to the central server
 def send_model(statedict):
     global DATA_SIZE
     train(statedict)
@@ -222,6 +223,7 @@ def send_model(statedict):
 # mqtt stuff
 #########################################
 
+# sends the current clients id to the server
 def send_client_id():
     global DEVICE_TOPIC
     message = {
@@ -233,17 +235,14 @@ def send_client_id():
         message,
         MessageType.SIMPLE)
 
-
+#  called by mqtt whenever a client connects, each client subscribes
 def on_connect(client, userdata, flags, rc):
     send_client_id()
 
     client.subscribe("server/general")
-    # client.subscribe("server/network")
     print("Connected with result code " + str(rc))
 
-# The callback for when a PUBLISH message is received from the server.
-
-
+# needed to log when errors occur 
 def on_log(client, userdata, level, buf):
     if level != mqtt.MQTT_LOG_DEBUG:
         print(traceback.format_exc())
@@ -251,16 +250,18 @@ def on_log(client, userdata, level, buf):
         print("level", level)
         exit()
 
-
+# called each time the client receives a message
 def on_message(client, userdata, msg):
     global CLUSTER_TOPIC, NUM_DATA_PARTITIONS, DATA_PARTITION_INDEX
 
     payload = json.loads(msg.payload.decode())
     message_type = payload["message"]
 
+    # processes every learning iteration after the first
     if msg.topic == CLUSTER_TOPIC:
         process_network_data(client, message_type, payload)
 
+    # sets up the first time the learning occurs 
     elif message_type == constants.START_LEARNING:
         if CONFIGURATION.learning_type == LearningType.FEDERATED:
             setup_data()
@@ -271,6 +272,7 @@ def on_message(client, userdata, msg):
         elif CONFIGURATION.learning_type == LearningType.PERSONALIZED:
             personalized(client)
 
+    # subscribes the client to its proper cluster
     elif message_type == constants.SUBSCRIBE_TO_CLUSTER:
         # remove current cluster topic and subscribe to new cluster topic
 
@@ -301,7 +303,7 @@ def on_message(client, userdata, msg):
         print(message_type)
         print('Could not handle message: {} -- topic: {}'.format(message_type, msg.topic))
 
-
+# does each federated or centralized learning iteration after the first
 def process_network_data(client, message_type, payload):
     global NETWORK_STRING
 
@@ -342,6 +344,7 @@ def process_network_data(client, message_type, payload):
             test(True)
 
 
+# resets the client to a default state to be used again later
 def reset_client():
     global CONFIGURATION, CLUSTER_TOPIC, NETWORK_STRING, DATABLOCK, DATA_INDEX, RUNNER, DATA_SIZE
 
@@ -355,16 +358,18 @@ def reset_client():
     DATA_SIZE = 0
     RUNNER = None
 
-
+# called whenever the client publishes data
 def on_publish(client, userdata, result):
     print("data published")
 
-
+# core code to set up mqtt and everything else
 client = mqtt.Client(client_id=PI_ID)
 client.on_connect = on_connect
 client.on_message = on_message
 client.on_log = on_log
+# connects to the public mqtt broker
 client.connect("broker.hivemq.com", 1883, 65534)
+# connects to a local mqtt broker
 #client.connect("localhost", 1883, 65534)
 
 # Blocking call that processes network traffic, dispatches callbacks and
