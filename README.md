@@ -60,6 +60,14 @@ The [train](https://github.com/davidzchen-ut/federated-learning-model/blob/a7029
 
 In general, the ModelRunner object is used throughout the project to run the learning task. The project uses the [get_model_runner function](https://github.com/davidzchen-ut/federated-learning-model/blob/a70294382a9e95a57c76d6810d287f57084f83df/common/person_classifier.py#L101) in the common/person_classifier.py file to get this ModelRunner object. To find where we use this function, you can use any IDE/GitHub's find references feature to see all the locations that it is being used.
 
+**Changing the training data**
+
+The client and server code to read in training / test data expect the data to be in a certain format. Any dataset can be used as long as the images are preprocessed into the following format. The data is expected to be in a .pkl (Python pickle) format, and contain an array of tuples. The first argument in each tuple is the image itself (ex. 2D array of image pixels) and the second argument is an array of labels. The labels are specific to the learning task, but for our case either "person" or "no-person" must exist (only one). In addition, this array of labels also contains all clusters that this image can be a part of (ex. "sky", "water", "ground").
+
+The [Jupyter Notebook](https://github.com/davidzchen-ut/federated-learning-model/blob/data_preprocessing/data/data_setup/Convert%20Coco%20Dataset%20to%20Federated%20Learning%20Demo%20Dataset.ipynb) used by us to preprocess the Coco dataset into our format is provided for reference in data/data_setup/.
+
+In server.py, there is a global variable CLUSTER_NAMES. This variable is an array of cluster names that the server is allowed to assign to clients. It is set by the developer and is required to be changed when the dataset / cluster labels change.
+
 **Miscellaneous**
 
 After making changes, make sure to format your code.
