@@ -555,4 +555,4 @@ def initialize_database():
 
 if __name__ == '__main__':
     initialize_database()
-    socketio.run(app, port=5000, host='0.0.0.0')
+    socketio.run(app, port=5000)#, host='0.0.0.0')

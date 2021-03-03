@@ -25,7 +25,7 @@ function Dashboard({ assignmentsByRunId, setAssignmentsByRunId }: Props) {
   let history = useHistory();
 
   const onFinish = (values: Store) => {
-    fetch("http://192.168.1.26:5000/executeRun", {
+    fetch("http://localhost:5000/executeRun", {
       method: "POST",
       headers: {
         Accept: "application/json",
